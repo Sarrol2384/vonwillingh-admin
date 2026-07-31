@@ -4,10 +4,10 @@ Invoices, quotes, and credit notes for VonWillingh Online.
 
 ## Setup (any PC)
 
-1. Clone the repo (skip if you already have it):
+1. Clone the repo (skip if you already have it). Use the `sync` branch — that is this invoices/quotes app:
 
    ```bash
-   git clone https://github.com/Sarrol2384/vonwillingh-admin.git
+   git clone -b sync https://github.com/Sarrol2384/vonwillingh-admin.git
    cd vonwillingh-admin
    ```
 
