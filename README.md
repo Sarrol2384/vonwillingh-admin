@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# VonWillingh Admin
 
-## Getting Started
+Invoices, quotes, and credit notes for VonWillingh Online.
 
-First, run the development server:
+## Setup (any PC)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+1. Clone the repo (skip if you already have it):
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+   ```bash
+   git clone https://github.com/Sarrol2384/vonwillingh-admin.git
+   cd vonwillingh-admin
+   ```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+2. Install dependencies:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+   ```bash
+   npm install
+   ```
 
-## Learn More
+3. Copy [`.env.local.example`](.env.local.example) to `.env.local` and add your Supabase URL + anon key (same values on every PC).
 
-To learn more about Next.js, take a look at the following resources:
+4. In the Supabase SQL Editor (once per project), run:
+   - [`supabase/migrations/001_schema.sql`](supabase/migrations/001_schema.sql)
+   - [`supabase/migrations/002_client_business_name.sql`](supabase/migrations/002_client_business_name.sql) if the clients table already existed without `business_name`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+5. Create an Auth user in Supabase (Authentication → Users) if you have not already.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+6. Start the app:
 
-## Deploy on Vercel
+   ```bash
+   npm run dev
+   ```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+   Open http://localhost:3017
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Syncing between PCs
+
+- Do **not** copy the whole project folder (skip `node_modules` and `.next`).
+- Day to day: `git pull` → work → `git push` → `git pull` on the other PC.
+- Recreate `.env.local` on each machine; it is never committed.
+
+## Features
+
+- Clients (including business name)
+- Quotes, invoices, credit notes (ZAR; no VAT charged)
+- Print / Save as PDF (browser print, A4 letterhead)
+- Quote → invoice conversion and document duplicate
+- Company settings (CIPC, bank details, letterhead)
