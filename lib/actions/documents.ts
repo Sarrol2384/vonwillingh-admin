@@ -13,7 +13,31 @@ const lineSchema = z.object({
   unit_price: z.coerce.number().min(0),
   vat_rate: z.coerce.number().min(0).max(100),
   sort_order: z.coerce.number().int().min(0),
+  done_date: z
+    .string()
+    .optional()
+    .nullable()
+    .transform((value) => {
+      const trimmed = value?.trim() ?? "";
+      return trimmed.length > 0 ? trimmed : null;
+    }),
 });
+
+function lineInsert(
+  documentId: string,
+  line: z.infer<typeof lineSchema>,
+  index: number,
+) {
+  return {
+    document_id: documentId,
+    description: line.description,
+    qty: line.qty,
+    unit_price: line.unit_price,
+    vat_rate: 0,
+    sort_order: line.sort_order ?? index,
+    done_date: line.done_date,
+  };
+}
 
 const documentSchema = z.object({
   type: z.enum(["quote", "invoice", "credit_note"]),
@@ -104,14 +128,7 @@ export async function createDocument(formData: FormData): Promise<ActionResult> 
   if (error || !doc) return { ok: false, error: error?.message ?? "Create failed" };
 
   const { error: linesError } = await supabase.from("document_lines").insert(
-    parsed.data.lines.map((line, index) => ({
-      document_id: doc.id,
-      description: line.description,
-      qty: line.qty,
-      unit_price: line.unit_price,
-      vat_rate: 0,
-      sort_order: line.sort_order ?? index,
-    })),
+    parsed.data.lines.map((line, index) => lineInsert(doc.id, line, index)),
   );
   if (linesError) return { ok: false, error: linesError.message };
 
@@ -174,14 +191,7 @@ export async function updateDocument(
 
   await supabase.from("document_lines").delete().eq("document_id", id);
   const { error: linesError } = await supabase.from("document_lines").insert(
-    parsed.data.lines.map((line, index) => ({
-      document_id: id,
-      description: line.description,
-      qty: line.qty,
-      unit_price: line.unit_price,
-      vat_rate: 0,
-      sort_order: line.sort_order ?? index,
-    })),
+    parsed.data.lines.map((line, index) => lineInsert(id, line, index)),
   );
   if (linesError) return { ok: false, error: linesError.message };
 
@@ -274,6 +284,7 @@ export async function duplicateDocument(id: string): Promise<ActionResult> {
         unit_price: line.unit_price,
         vat_rate: 0,
         sort_order: line.sort_order ?? index,
+        done_date: line.done_date ?? null,
       })),
     );
     if (linesError) return { ok: false, error: linesError.message };
@@ -348,6 +359,7 @@ export async function convertQuoteToInvoice(quoteId: string): Promise<ActionResu
         unit_price: line.unit_price,
         vat_rate: 0,
         sort_order: line.sort_order ?? index,
+        done_date: line.done_date ?? null,
       })),
     );
     if (linesError) return { ok: false, error: linesError.message };

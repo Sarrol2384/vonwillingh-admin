@@ -26,10 +26,17 @@ export default async function NewDocumentPage({
   }
 
   const { supabase } = await requireUser();
-  const [{ data: clients }, { data: settings }] = await Promise.all([
-    supabase.from("clients").select("*").order("name"),
-    supabase.from("company_settings").select("*").limit(1).maybeSingle(),
-  ]);
+  const [{ data: clients }, { data: settings }, { data: catalogItems }] =
+    await Promise.all([
+      supabase.from("clients").select("*").order("name"),
+      supabase.from("company_settings").select("*").limit(1).maybeSingle(),
+      supabase
+        .from("catalog_items")
+        .select("*")
+        .eq("active", true)
+        .order("sort_order")
+        .order("name"),
+    ]);
 
   const issue = todayIsoDate();
   let defaultDue = "";
@@ -54,6 +61,7 @@ export default async function NewDocumentPage({
         mode="create"
         documentType={type}
         clients={clients ?? []}
+        catalogItems={catalogItems ?? []}
         defaultDueOrValid={defaultDue}
       />
     </div>

@@ -113,7 +113,14 @@ export function PrintDocument({
             const t = calcLineTotals({ ...line, vat_rate: 0 });
             return (
               <tr key={line.id} className="border-b border-neutral-200 align-top">
-                <td className="py-2 pr-2 whitespace-pre-wrap">{line.description}</td>
+                <td className="py-2 pr-2 whitespace-pre-wrap">
+                  <div>{line.description}</div>
+                  {line.done_date ? (
+                    <div className="mt-0.5 text-neutral-500">
+                      Done: {formatDate(line.done_date)}
+                    </div>
+                  ) : null}
+                </td>
                 <td className="py-2 pr-2 text-right tabular-nums">{line.qty}</td>
                 <td className="py-2 pr-2 text-right tabular-nums">
                   {formatZar(Number(line.unit_price))}

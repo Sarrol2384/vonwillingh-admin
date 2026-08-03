@@ -22,6 +22,7 @@ Invoices, quotes, and credit notes for VonWillingh Online.
 4. In the Supabase SQL Editor (once per project), run:
    - [`supabase/migrations/001_schema.sql`](supabase/migrations/001_schema.sql)
    - [`supabase/migrations/002_client_business_name.sql`](supabase/migrations/002_client_business_name.sql) if the clients table already existed without `business_name`
+   - [`supabase/migrations/003_line_done_date_and_catalog.sql`](supabase/migrations/003_line_done_date_and_catalog.sql) for line done dates and the Items catalog
 
 5. Create an Auth user in Supabase (Authentication → Users) if you have not already.
 
@@ -42,7 +43,9 @@ Invoices, quotes, and credit notes for VonWillingh Online.
 ## Features
 
 - Clients (including business name)
+- Catalog items (reusable names + prices to pick on documents)
 - Quotes, invoices, credit notes (ZAR; no VAT charged)
+- Optional per-line done date (shown on print)
 - Print / Save as PDF (browser print, A4 letterhead)
 - Quote → invoice conversion and document duplicate
 - Company settings (CIPC, bank details, letterhead)

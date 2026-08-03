@@ -218,6 +218,7 @@ export type Database = {
           unit_price: number;
           vat_rate: number;
           sort_order: number;
+          done_date: string | null;
         };
         Insert: {
           id?: string;
@@ -227,6 +228,7 @@ export type Database = {
           unit_price?: number;
           vat_rate?: number;
           sort_order?: number;
+          done_date?: string | null;
         };
         Update: {
           id?: string;
@@ -236,6 +238,7 @@ export type Database = {
           unit_price?: number;
           vat_rate?: number;
           sort_order?: number;
+          done_date?: string | null;
         };
         Relationships: [
           {
@@ -246,6 +249,36 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      catalog_items: {
+        Row: {
+          id: string;
+          name: string;
+          unit_price: number;
+          active: boolean;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          unit_price?: number;
+          active?: boolean;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          unit_price?: number;
+          active?: boolean;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
       };
     };
     Views: Record<string, never>;
@@ -268,6 +301,7 @@ export type CompanySettings =
 export type Client = Database["public"]["Tables"]["clients"]["Row"];
 export type Document = Database["public"]["Tables"]["documents"]["Row"];
 export type DocumentLine = Database["public"]["Tables"]["document_lines"]["Row"];
+export type CatalogItem = Database["public"]["Tables"]["catalog_items"]["Row"];
 
 export type DocumentWithRelations = Document & {
   clients: Client | null;

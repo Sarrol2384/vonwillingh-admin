@@ -6,6 +6,7 @@ import {
   FileText,
   LayoutDashboard,
   LogOut,
+  Package,
   Receipt,
   Settings,
   Users,
@@ -19,6 +20,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 const links = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/clients", label: "Clients", icon: Users },
+  { href: "/items", label: "Items", icon: Package },
   { href: "/documents?type=quote", label: "Quotes", icon: FileText, type: "quote" },
   {
     href: "/documents?type=invoice",

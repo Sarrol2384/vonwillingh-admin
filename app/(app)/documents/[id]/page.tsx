@@ -16,14 +16,21 @@ export default async function DocumentDetailPage({
   const { id } = await params;
   const { supabase } = await requireUser();
 
-  const [{ data: document }, { data: clients }] = await Promise.all([
-    supabase
-      .from("documents")
-      .select("*, document_lines(*)")
-      .eq("id", id)
-      .maybeSingle(),
-    supabase.from("clients").select("*").order("name"),
-  ]);
+  const [{ data: document }, { data: clients }, { data: catalogItems }] =
+    await Promise.all([
+      supabase
+        .from("documents")
+        .select("*, document_lines(*)")
+        .eq("id", id)
+        .maybeSingle(),
+      supabase.from("clients").select("*").order("name"),
+      supabase
+        .from("catalog_items")
+        .select("*")
+        .eq("active", true)
+        .order("sort_order")
+        .order("name"),
+    ]);
 
   if (!document) notFound();
 
@@ -51,6 +58,7 @@ export default async function DocumentDetailPage({
         mode="edit"
         documentType={document.type}
         clients={clients ?? []}
+        catalogItems={catalogItems ?? []}
         document={document}
         lines={lines}
       />
