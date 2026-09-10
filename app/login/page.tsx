@@ -89,8 +89,22 @@ function LoginForm() {
       router.replace(safeRedirect === "/" ? "/dashboard" : safeRedirect);
       router.refresh();
     } catch (err) {
+      const raw = err instanceof Error ? err.message : "Invalid email or password";
+      const host = (() => {
+        try {
+          return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").host;
+        } catch {
+          return "";
+        }
+      })();
+      const isNetwork =
+        raw === "Failed to fetch" ||
+        raw.toLowerCase().includes("failed to fetch") ||
+        raw.toLowerCase().includes("networkerror");
       setMessage(
-        err instanceof Error ? err.message : "Invalid email or password",
+        isNetwork
+          ? `Cannot reach Supabase${host ? ` (${host})` : ""}. Check Vercel env vars match the new project, redeploy, and confirm the project is not paused.`
+          : raw,
       );
     } finally {
       setLoading(false);

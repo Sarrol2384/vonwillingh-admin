@@ -45,6 +45,11 @@ export default async function NewDocumentPage({
       issue,
       settings?.default_quote_validity_days ?? 30,
     );
+  } else if (type === "invoice") {
+    defaultDue = addDays(
+      issue,
+      settings?.default_payment_terms_days ?? 14,
+    );
   }
 
   return (

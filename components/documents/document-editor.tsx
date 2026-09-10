@@ -96,9 +96,7 @@ export function DocumentEditor({
     document?.issue_date ?? todayIsoDate(),
   );
   const [dueOrValid, setDueOrValid] = useState(
-    documentType === "invoice" || document?.type === "invoice"
-      ? ""
-      : (document?.due_or_valid_until ?? defaultDueOrValid ?? ""),
+    document?.due_or_valid_until ?? defaultDueOrValid ?? "",
   );
   const [notes, setNotes] = useState(document?.notes ?? "");
   const [lineItems, setLineItems] = useState<LineDraft[]>(() => toDraft(lines));
@@ -181,10 +179,7 @@ export function DocumentEditor({
     formData.set("client_id", clientId);
     formData.set("status", status);
     formData.set("issue_date", issueDate);
-    formData.set(
-      "due_or_valid_until",
-      type === "invoice" ? "" : dueOrValid,
-    );
+    formData.set("due_or_valid_until", dueOrValid);
     formData.set("notes", notes);
     formData.set(
       "lines",
@@ -217,7 +212,12 @@ export function DocumentEditor({
     });
   }
 
-  const dueLabel = type === "quote" ? "Valid until" : "Date";
+  const dueLabel =
+    type === "quote"
+      ? "Valid until"
+      : type === "invoice"
+        ? "Due date"
+        : "Date";
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -270,7 +270,7 @@ export function DocumentEditor({
             required
           />
         </div>
-        {type !== "invoice" ? (
+        {type !== "credit_note" ? (
           <div className="space-y-2">
             <Label htmlFor="due_or_valid_until">{dueLabel}</Label>
             <Input

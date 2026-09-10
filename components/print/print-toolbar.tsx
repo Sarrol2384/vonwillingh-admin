@@ -6,7 +6,8 @@ export function PrintToolbar() {
   return (
     <div className="no-print mb-6 flex items-center justify-between gap-3 border-b pb-4">
       <p className="text-sm text-muted-foreground">
-        Use your browser print dialog and choose “Save as PDF” if needed.
+        Open this page in Chrome or Edge, then Print → Save as PDF. Cursor’s
+        built-in browser does not support print preview.
       </p>
       <Button type="button" onClick={() => window.print()}>
         Print

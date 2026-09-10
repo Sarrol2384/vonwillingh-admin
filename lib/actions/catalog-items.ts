@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
+import { WEBSITE_CATALOG_SEED } from "@/lib/catalog-seed";
 
 const catalogItemSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -93,4 +94,56 @@ export async function deleteCatalogItem(id: string): Promise<ActionResult> {
   revalidatePath("/items");
   revalidatePath("/documents");
   return { ok: true, id };
+}
+
+export type SeedCatalogResult =
+  | { ok: true; added: number; skipped: number }
+  | { ok: false; error: string };
+
+/** Idempotent import of website packages/care/cloud/add-ons by name. */
+export async function seedCatalogFromWebsite(): Promise<SeedCatalogResult> {
+  const { supabase } = await requireUser();
+
+  const { data: existing, error: listError } = await supabase
+    .from("catalog_items")
+    .select("name, sort_order");
+
+  if (listError) return { ok: false, error: listError.message };
+
+  const existingNames = new Set(
+    (existing ?? []).map((row) => row.name.trim().toLowerCase()),
+  );
+  let nextSort =
+    (existing ?? []).reduce(
+      (max, row) => Math.max(max, row.sort_order ?? 0),
+      0,
+    ) + 1;
+
+  let added = 0;
+  let skipped = 0;
+
+  for (const seed of WEBSITE_CATALOG_SEED) {
+    const key = seed.name.trim().toLowerCase();
+    if (existingNames.has(key)) {
+      skipped += 1;
+      continue;
+    }
+
+    const { error } = await supabase.from("catalog_items").insert({
+      name: seed.name,
+      unit_price: seed.unit_price,
+      active: true,
+      sort_order: nextSort,
+    });
+
+    if (error) return { ok: false, error: error.message };
+
+    existingNames.add(key);
+    nextSort += 1;
+    added += 1;
+  }
+
+  revalidatePath("/items");
+  revalidatePath("/documents");
+  return { ok: true, added, skipped };
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   FileText,
+  FileSignature,
   LayoutDashboard,
   LogOut,
   Package,
@@ -11,6 +12,9 @@ import {
   Settings,
   Users,
   FileMinus2,
+  Scale,
+  ScrollText,
+  Wallet,
 } from "lucide-react";
 import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
@@ -20,6 +24,10 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 const links = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/clients", label: "Clients", icon: Users },
+  { href: "/balances", label: "Balances", icon: Scale },
+  { href: "/statements", label: "Statements", icon: ScrollText },
+  { href: "/contracts", label: "Contracts", icon: FileSignature },
+  { href: "/payments", label: "Payments", icon: Wallet },
   { href: "/items", label: "Items", icon: Package },
   { href: "/documents?type=quote", label: "Quotes", icon: FileText, type: "quote" },
   {
@@ -95,7 +103,9 @@ export function AppNav() {
             className="h-16 w-auto"
           />
         </Link>
-        <p className="mt-2 text-xs text-muted-foreground">Invoices & Quotes</p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Billing, contracts & payments
+        </p>
       </div>
       <Suspense fallback={<div className="flex-1 p-2" />}>
         <NavLinks />

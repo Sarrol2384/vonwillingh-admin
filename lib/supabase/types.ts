@@ -9,6 +9,10 @@ export type DocumentStatus =
   | "issued"
   | "void";
 
+export type PaymentMethod = "eft" | "cash" | "card" | "other";
+export type ContractStatus = "draft" | "active" | "paused" | "ended";
+export type BillingCadence = "monthly" | "quarterly" | "yearly";
+
 export type Json =
   | string
   | number
@@ -143,6 +147,196 @@ export type Database = {
         };
         Relationships: [];
       };
+      contracts: {
+        Row: {
+          id: string;
+          client_id: string;
+          title: string;
+          status: ContractStatus;
+          cadence: BillingCadence;
+          start_date: string;
+          end_date: string | null;
+          next_bill_on: string | null;
+          auto_send: boolean;
+          payment_terms_days: number | null;
+          notes: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          title: string;
+          status?: ContractStatus;
+          cadence?: BillingCadence;
+          start_date?: string;
+          end_date?: string | null;
+          next_bill_on?: string | null;
+          auto_send?: boolean;
+          payment_terms_days?: number | null;
+          notes?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          title?: string;
+          status?: ContractStatus;
+          cadence?: BillingCadence;
+          start_date?: string;
+          end_date?: string | null;
+          next_bill_on?: string | null;
+          auto_send?: boolean;
+          payment_terms_days?: number | null;
+          notes?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "contracts_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      contract_lines: {
+        Row: {
+          id: string;
+          contract_id: string;
+          description: string;
+          qty: number;
+          unit_price: number;
+          sort_order: number;
+        };
+        Insert: {
+          id?: string;
+          contract_id: string;
+          description: string;
+          qty?: number;
+          unit_price?: number;
+          sort_order?: number;
+        };
+        Update: {
+          id?: string;
+          contract_id?: string;
+          description?: string;
+          qty?: number;
+          unit_price?: number;
+          sort_order?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "contract_lines_contract_id_fkey";
+            columns: ["contract_id"];
+            isOneToOne: false;
+            referencedRelation: "contracts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      payments: {
+        Row: {
+          id: string;
+          client_id: string;
+          document_id: string | null;
+          amount: number;
+          paid_at: string;
+          method: PaymentMethod;
+          reference: string;
+          notes: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          document_id?: string | null;
+          amount: number;
+          paid_at?: string;
+          method?: PaymentMethod;
+          reference?: string;
+          notes?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          document_id?: string | null;
+          amount?: number;
+          paid_at?: string;
+          method?: PaymentMethod;
+          reference?: string;
+          notes?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "payments_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payments_document_id_fkey";
+            columns: ["document_id"];
+            isOneToOne: false;
+            referencedRelation: "documents";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      invoice_sends: {
+        Row: {
+          id: string;
+          document_id: string;
+          client_id: string;
+          to_email: string;
+          status: "sent" | "failed";
+          provider_message_id: string;
+          error: string;
+          sent_at: string;
+        };
+        Insert: {
+          id?: string;
+          document_id: string;
+          client_id: string;
+          to_email: string;
+          status: "sent" | "failed";
+          provider_message_id?: string;
+          error?: string;
+          sent_at?: string;
+        };
+        Update: {
+          id?: string;
+          document_id?: string;
+          client_id?: string;
+          to_email?: string;
+          status?: "sent" | "failed";
+          provider_message_id?: string;
+          error?: string;
+          sent_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "invoice_sends_document_id_fkey";
+            columns: ["document_id"];
+            isOneToOne: false;
+            referencedRelation: "documents";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "invoice_sends_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       documents: {
         Row: {
           id: string;
@@ -157,6 +351,9 @@ export type Database = {
           total: number;
           notes: string;
           source_quote_id: string | null;
+          contract_id: string | null;
+          public_token: string | null;
+          billing_period_start: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -173,6 +370,9 @@ export type Database = {
           total?: number;
           notes?: string;
           source_quote_id?: string | null;
+          contract_id?: string | null;
+          public_token?: string | null;
+          billing_period_start?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -189,6 +389,9 @@ export type Database = {
           total?: number;
           notes?: string;
           source_quote_id?: string | null;
+          contract_id?: string | null;
+          public_token?: string | null;
+          billing_period_start?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -205,6 +408,13 @@ export type Database = {
             columns: ["source_quote_id"];
             isOneToOne: false;
             referencedRelation: "documents";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "documents_contract_id_fkey";
+            columns: ["contract_id"];
+            isOneToOne: false;
+            referencedRelation: "contracts";
             referencedColumns: ["id"];
           },
         ];
@@ -291,6 +501,9 @@ export type Database = {
     Enums: {
       document_type: DocumentType;
       document_status: DocumentStatus;
+      payment_method: PaymentMethod;
+      contract_status: ContractStatus;
+      billing_cadence: BillingCadence;
     };
     CompositeTypes: Record<string, never>;
   };
@@ -302,8 +515,17 @@ export type Client = Database["public"]["Tables"]["clients"]["Row"];
 export type Document = Database["public"]["Tables"]["documents"]["Row"];
 export type DocumentLine = Database["public"]["Tables"]["document_lines"]["Row"];
 export type CatalogItem = Database["public"]["Tables"]["catalog_items"]["Row"];
+export type Contract = Database["public"]["Tables"]["contracts"]["Row"];
+export type ContractLine = Database["public"]["Tables"]["contract_lines"]["Row"];
+export type Payment = Database["public"]["Tables"]["payments"]["Row"];
+export type InvoiceSend = Database["public"]["Tables"]["invoice_sends"]["Row"];
 
 export type DocumentWithRelations = Document & {
   clients: Client | null;
   document_lines: DocumentLine[];
+};
+
+export type ContractWithRelations = Contract & {
+  clients: Client | null;
+  contract_lines: ContractLine[];
 };

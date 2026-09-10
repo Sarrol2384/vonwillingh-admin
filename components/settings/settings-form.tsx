@@ -169,11 +169,18 @@ export function SettingsForm({ settings }: { settings: CompanySettings }) {
               defaultValue={settings.default_quote_validity_days}
             />
           </div>
-          <input
-            type="hidden"
-            name="default_payment_terms_days"
-            value={settings.default_payment_terms_days}
-          />
+          <div className="space-y-2">
+            <Label htmlFor="default_payment_terms_days">
+              Invoice payment terms (days)
+            </Label>
+            <Input
+              id="default_payment_terms_days"
+              name="default_payment_terms_days"
+              type="number"
+              min={0}
+              defaultValue={settings.default_payment_terms_days}
+            />
+          </div>
           <div className="space-y-2">
             <Label htmlFor="quote_prefix">Quote prefix</Label>
             <Input

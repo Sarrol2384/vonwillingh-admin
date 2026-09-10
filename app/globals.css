@@ -110,6 +110,9 @@
   }
   @page {
     size: A4;
-    margin: 12mm;
+    margin: 10mm 0 0;
+  }
+  @page :first {
+    margin-top: 0;
   }
 }

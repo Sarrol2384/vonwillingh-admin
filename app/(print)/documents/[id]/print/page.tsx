@@ -31,7 +31,7 @@ export default async function PrintDocumentPage({
   }) as CompanySettings;
 
   return (
-    <div className="mx-auto max-w-[210mm] p-6 print:max-w-none print:p-0">
+    <div className="mx-auto max-w-[210mm] bg-neutral-100 p-6 print:max-w-none print:bg-white print:p-0">
       <PrintToolbar />
       <PrintDocument
         document={document}

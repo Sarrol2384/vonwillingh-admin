@@ -4,8 +4,29 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
+import { dueDateFromTerms, newPublicToken } from "@/lib/billing";
 import { calcDocumentTotals, todayIsoDate } from "@/lib/money";
 import type { DocumentStatus, DocumentType } from "@/lib/supabase/types";
+
+async function defaultInvoiceDueDate(
+  supabase: Awaited<ReturnType<typeof requireUser>>["supabase"],
+  issueDate: string,
+  provided: string | null | undefined,
+): Promise<string | null> {
+  const trimmed = provided?.trim() || "";
+  if (trimmed) return trimmed;
+
+  const { data: settings } = await supabase
+    .from("company_settings")
+    .select("default_payment_terms_days")
+    .limit(1)
+    .maybeSingle();
+
+  return dueDateFromTerms(
+    issueDate,
+    settings?.default_payment_terms_days ?? 14,
+  );
+}
 
 const lineSchema = z.object({
   description: z.string().min(1),
@@ -98,7 +119,11 @@ export async function createDocument(formData: FormData): Promise<ActionResult> 
 
   const dueOrValid =
     parsed.data.type === "invoice"
-      ? null
+      ? await defaultInvoiceDueDate(
+          supabase,
+          parsed.data.issue_date,
+          parsed.data.due_or_valid_until,
+        )
       : parsed.data.due_or_valid_until || null;
 
   const totals = calcDocumentTotals(
@@ -121,6 +146,8 @@ export async function createDocument(formData: FormData): Promise<ActionResult> 
       subtotal: totals.subtotal,
       vat_total: 0,
       total: totals.total,
+      public_token:
+        parsed.data.type === "invoice" ? newPublicToken() : null,
     })
     .select("id")
     .single();
@@ -162,7 +189,11 @@ export async function updateDocument(
   const { supabase } = await requireUser();
   const dueOrValid =
     parsed.data.type === "invoice"
-      ? null
+      ? await defaultInvoiceDueDate(
+          supabase,
+          parsed.data.issue_date,
+          parsed.data.due_or_valid_until,
+        )
       : parsed.data.due_or_valid_until || null;
   const totals = calcDocumentTotals(
     parsed.data.lines.map((line) => ({
@@ -261,12 +292,15 @@ export async function duplicateDocument(id: string): Promise<ActionResult> {
       client_id: source.client_id,
       issue_date: todayIsoDate(),
       due_or_valid_until:
-        source.type === "invoice" ? null : source.due_or_valid_until,
+        source.type === "invoice"
+          ? await defaultInvoiceDueDate(supabase, todayIsoDate(), null)
+          : source.due_or_valid_until,
       notes: source.notes,
       subtotal: totals.subtotal,
       vat_total: 0,
       total: totals.total,
       source_quote_id: null,
+      public_token: source.type === "invoice" ? newPublicToken() : null,
     })
     .select("id")
     .single();
@@ -316,6 +350,7 @@ export async function convertQuoteToInvoice(quoteId: string): Promise<ActionResu
   }
 
   const issueDate = todayIsoDate();
+  const due = await defaultInvoiceDueDate(supabase, issueDate, null);
 
   const lines = (quote.document_lines ?? []).sort(
     (a, b) => a.sort_order - b.sort_order,
@@ -336,12 +371,13 @@ export async function convertQuoteToInvoice(quoteId: string): Promise<ActionResu
       status: "draft",
       client_id: quote.client_id,
       issue_date: issueDate,
-      due_or_valid_until: null,
+      due_or_valid_until: due,
       notes: quote.notes,
       subtotal: totals.subtotal,
       vat_total: 0,
       total: totals.total,
       source_quote_id: quote.id,
+      public_token: newPublicToken(),
     })
     .select("id")
     .single();
