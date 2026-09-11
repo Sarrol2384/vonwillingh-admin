@@ -23,7 +23,7 @@ export default async function ClientsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Clients</h1>
           <p className="text-sm text-muted-foreground">
-            People and businesses you work with — open a client to manage documents.
+            People and businesses you bill.
           </p>
         </div>
         <LinkButton href="/clients/new">New client</LinkButton>

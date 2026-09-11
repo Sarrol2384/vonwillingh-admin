@@ -2,11 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { ClientForm } from "@/components/clients/client-form";
-import { CreateClientDocumentButton } from "@/components/client-documents/create-client-document-button";
-import { DownloadWordButton } from "@/components/documents/download-word-button";
-import { DocumentTypeBadge } from "@/components/documents/status-badge";
-import { DocumentStatusSelect } from "@/components/documents/document-status-select";
 import { LinkButton } from "@/components/ui/link-button";
+import {
+  BILLING_CADENCE_LABELS,
+  CONTRACT_STATUS_LABELS,
+  PAYMENT_METHOD_LABELS,
+  calcArSummary,
+} from "@/lib/payments";
+import { formatDate, formatZar } from "@/lib/money";
 import {
   Card,
   CardContent,
@@ -22,11 +25,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { CLIENT_DOCUMENT_TYPE_LABELS } from "@/lib/client-documents";
-import { formatDate, formatZar, totalFromDocumentLines } from "@/lib/money";
-import { Badge } from "@/components/ui/badge";
 
-export default async function ClientHubPage({
+export default async function EditClientPage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -36,187 +36,185 @@ export default async function ClientHubPage({
 
   const [
     { data: client },
-    { data: financialDocs },
-    { data: clientDocs },
+    { data: contracts },
+    { data: invoices },
+    { data: payments },
   ] = await Promise.all([
     supabase.from("clients").select("*").eq("id", id).maybeSingle(),
     supabase
-      .from("documents")
-      .select("*, document_lines(qty, unit_price)")
-      .eq("client_id", id)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("client_documents")
+      .from("contracts")
       .select("*")
       .eq("client_id", id)
-      .order("created_at", { ascending: false }),
+      .order("updated_at", { ascending: false }),
+    supabase
+      .from("documents")
+      .select("id, number, total, status, issue_date")
+      .eq("client_id", id)
+      .eq("type", "invoice")
+      .neq("status", "void")
+      .order("issue_date", { ascending: false }),
+    supabase
+      .from("payments")
+      .select("*, documents(number)")
+      .eq("client_id", id)
+      .order("paid_at", { ascending: false })
+      .limit(20),
   ]);
 
   if (!client) notFound();
 
-  const displayName = client.business_name?.trim() || client.name;
-  const quoteCount = financialDocs?.filter((d) => d.type === "quote").length ?? 0;
-  const invoiceCount =
-    financialDocs?.filter((d) => d.type === "invoice").length ?? 0;
-  const agreementCount =
-    clientDocs?.filter((d) => d.type === "service_agreement").length ?? 0;
-  const briefCount =
-    clientDocs?.filter((d) => d.type === "discovery_brief").length ?? 0;
+  const { data: allocated } = await supabase
+    .from("payments")
+    .select("amount, document_id")
+    .eq("client_id", id);
+
+  const summary = calcArSummary(invoices ?? [], allocated ?? []);
+  const invoiced = summary.invoiced;
+  const paid = summary.received;
+  const outstanding = summary.outstanding;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{displayName}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {client.business_name?.trim() || client.name}
+          </h1>
           <p className="text-sm text-muted-foreground">
-            Client workspace — manage details and download Word documents.
+            Client details, contracts, and payments
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <LinkButton href={`/documents/new?type=quote&client_id=${id}`} variant="outline">
-            New quote
+          <LinkButton
+            href={`/clients/${client.id}/statement`}
+            variant="outline"
+          >
+            Statement
           </LinkButton>
-          <LinkButton href={`/documents/new?type=invoice&client_id=${id}`}>
-            New invoice
+          <LinkButton
+            href={`/contracts/new?client_id=${client.id}`}
+            variant="outline"
+          >
+            New contract
           </LinkButton>
-          <CreateClientDocumentButton
-            clientId={id}
-            type="service_agreement"
-            label="New agreement"
-          />
-          <CreateClientDocumentButton
-            clientId={id}
-            type="discovery_brief"
-            label="Discovery brief"
-            variant="accent"
-          />
+          <LinkButton
+            href={`/payments/new?client_id=${client.id}`}
+            variant="outline"
+          >
+            Record payment
+          </LinkButton>
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <CardHeader>
-            <CardDescription>Quotes</CardDescription>
-            <CardTitle className="text-2xl">{quoteCount}</CardTitle>
+            <CardDescription>Invoiced</CardDescription>
+            <CardTitle className="text-2xl tabular-nums">
+              {formatZar(invoiced)}
+            </CardTitle>
           </CardHeader>
         </Card>
         <Card>
           <CardHeader>
-            <CardDescription>Invoices</CardDescription>
-            <CardTitle className="text-2xl">{invoiceCount}</CardTitle>
+            <CardDescription>Paid</CardDescription>
+            <CardTitle className="text-2xl tabular-nums">
+              {formatZar(paid)}
+            </CardTitle>
           </CardHeader>
         </Card>
         <Card>
           <CardHeader>
-            <CardDescription>Agreements</CardDescription>
-            <CardTitle className="text-2xl">{agreementCount}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Discovery briefs</CardDescription>
-            <CardTitle className="text-2xl">{briefCount}</CardTitle>
+            <CardDescription>Outstanding (invoiced − paid)</CardDescription>
+            <CardTitle className="text-2xl tabular-nums">
+              {formatZar(outstanding)}
+            </CardTitle>
           </CardHeader>
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Documents</CardTitle>
-          <CardDescription>
-            Quotes, invoices, agreements, and discovery briefs for this client.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {!financialDocs?.length && !clientDocs?.length ? (
-            <p className="text-sm text-muted-foreground">
-              No documents yet. Use the buttons above to create a quote, agreement, or
-              discovery brief.
-            </p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Title / Number</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {financialDocs?.map((doc) => (
-                  <TableRow key={doc.id}>
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+          Contracts
+        </h2>
+        {!contracts?.length ? (
+          <p className="text-sm text-muted-foreground">No contracts yet.</p>
+        ) : (
+          <ul className="space-y-1 text-sm">
+            {contracts.map((contract) => (
+              <li key={contract.id}>
+                <Link
+                  href={`/contracts/${contract.id}`}
+                  className="font-medium hover:underline"
+                >
+                  {contract.title}
+                </Link>
+                <span className="text-muted-foreground">
+                  {" "}
+                  · {CONTRACT_STATUS_LABELS[contract.status]} ·{" "}
+                  {BILLING_CADENCE_LABELS[contract.cadence]}
+                  {contract.next_bill_on
+                    ? ` · next ${formatDate(contract.next_bill_on)}`
+                    : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+          Recent payments
+        </h2>
+        {!payments?.length ? (
+          <p className="text-sm text-muted-foreground">No payments yet.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Invoice</TableHead>
+                <TableHead>Method</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {payments.map((payment) => {
+                const doc = payment.documents as { number: string } | null;
+                return (
+                  <TableRow key={payment.id}>
+                    <TableCell>{formatDate(payment.paid_at)}</TableCell>
                     <TableCell>
-                      <Link
-                        href={`/documents/${doc.id}`}
-                        className="font-medium hover:underline"
-                      >
-                        {doc.number}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <DocumentTypeBadge type={doc.type} />
-                    </TableCell>
-                    <TableCell>{formatDate(doc.issue_date)}</TableCell>
-                    <TableCell>
-                      <DocumentStatusSelect
-                        id={doc.id}
-                        type={doc.type}
-                        status={doc.status}
-                      />
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatZar(
-                        totalFromDocumentLines(
-                          (doc.document_lines as { qty: number; unit_price: number }[]) ??
-                            [],
-                        ),
+                      {payment.document_id && doc?.number ? (
+                        <Link
+                          href={`/documents/${payment.document_id}`}
+                          className="hover:underline"
+                        >
+                          {doc.number}
+                        </Link>
+                      ) : (
+                        "—"
                       )}
                     </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <DownloadWordButton kind={doc.type} id={doc.id} label="Word" />
-                      </div>
+                    <TableCell>
+                      {PAYMENT_METHOD_LABELS[payment.method]}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatZar(Number(payment.amount))}
                     </TableCell>
                   </TableRow>
-                ))}
-                {clientDocs?.map((doc) => (
-                  <TableRow key={doc.id}>
-                    <TableCell>
-                      <Link
-                        href={`/client-documents/${doc.id}`}
-                        className="font-medium hover:underline"
-                      >
-                        {doc.title}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">
-                        {CLIENT_DOCUMENT_TYPE_LABELS[doc.type]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{formatDate(doc.created_at.slice(0, 10))}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{doc.status}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right">—</TableCell>
-                    <TableCell className="text-right">
-                      <DownloadWordButton kind={doc.type} id={doc.id} label="Word" />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </section>
 
       <Card>
         <CardHeader>
-          <CardTitle>Client details</CardTitle>
-          <CardDescription>Contact and billing information.</CardDescription>
+          <CardTitle>Edit details</CardTitle>
+          <CardDescription>Contact and billing information</CardDescription>
         </CardHeader>
         <CardContent>
           <ClientForm mode="edit" client={client} />

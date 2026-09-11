@@ -4,8 +4,29 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
+import { dueDateFromTerms, newPublicToken } from "@/lib/billing";
 import { calcDocumentTotals, todayIsoDate } from "@/lib/money";
 import type { DocumentStatus, DocumentType } from "@/lib/supabase/types";
+
+async function defaultInvoiceDueDate(
+  supabase: Awaited<ReturnType<typeof requireUser>>["supabase"],
+  issueDate: string,
+  provided: string | null | undefined,
+): Promise<string | null> {
+  const trimmed = provided?.trim() || "";
+  if (trimmed) return trimmed;
+
+  const { data: settings } = await supabase
+    .from("company_settings")
+    .select("default_payment_terms_days")
+    .limit(1)
+    .maybeSingle();
+
+  return dueDateFromTerms(
+    issueDate,
+    settings?.default_payment_terms_days ?? 14,
+  );
+}
 
 const lineSchema = z.object({
   description: z.string().min(1),
@@ -13,7 +34,31 @@ const lineSchema = z.object({
   unit_price: z.coerce.number().min(0),
   vat_rate: z.coerce.number().min(0).max(100),
   sort_order: z.coerce.number().int().min(0),
+  done_date: z
+    .string()
+    .optional()
+    .nullable()
+    .transform((value) => {
+      const trimmed = value?.trim() ?? "";
+      return trimmed.length > 0 ? trimmed : null;
+    }),
 });
+
+function lineInsert(
+  documentId: string,
+  line: z.infer<typeof lineSchema>,
+  index: number,
+) {
+  return {
+    document_id: documentId,
+    description: line.description,
+    qty: line.qty,
+    unit_price: line.unit_price,
+    vat_rate: 0,
+    sort_order: line.sort_order ?? index,
+    done_date: line.done_date,
+  };
+}
 
 const documentSchema = z.object({
   type: z.enum(["quote", "invoice", "credit_note"]),
@@ -42,34 +87,6 @@ function parseLines(raw: string) {
   } catch {
     return { success: false as const, error: { issues: [{ message: "Invalid lines" }] } };
   }
-}
-
-async function syncDocumentTotalsFromLines(
-  supabase: Awaited<ReturnType<typeof requireUser>>["supabase"],
-  documentId: string,
-) {
-  const { data: lines } = await supabase
-    .from("document_lines")
-    .select("qty, unit_price")
-    .eq("document_id", documentId);
-
-  const totals = calcDocumentTotals(
-    (lines ?? []).map((line) => ({
-      qty: Number(line.qty),
-      unit_price: Number(line.unit_price),
-      vat_rate: 0,
-    })),
-  );
-
-  await supabase
-    .from("documents")
-    .update({
-      subtotal: totals.subtotal,
-      vat_total: 0,
-      total: totals.total,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", documentId);
 }
 
 export async function createDocument(formData: FormData): Promise<ActionResult> {
@@ -102,7 +119,11 @@ export async function createDocument(formData: FormData): Promise<ActionResult> 
 
   const dueOrValid =
     parsed.data.type === "invoice"
-      ? null
+      ? await defaultInvoiceDueDate(
+          supabase,
+          parsed.data.issue_date,
+          parsed.data.due_or_valid_until,
+        )
       : parsed.data.due_or_valid_until || null;
 
   const totals = calcDocumentTotals(
@@ -125,6 +146,8 @@ export async function createDocument(formData: FormData): Promise<ActionResult> 
       subtotal: totals.subtotal,
       vat_total: 0,
       total: totals.total,
+      public_token:
+        parsed.data.type === "invoice" ? newPublicToken() : null,
     })
     .select("id")
     .single();
@@ -132,14 +155,7 @@ export async function createDocument(formData: FormData): Promise<ActionResult> 
   if (error || !doc) return { ok: false, error: error?.message ?? "Create failed" };
 
   const { error: linesError } = await supabase.from("document_lines").insert(
-    parsed.data.lines.map((line, index) => ({
-      document_id: doc.id,
-      description: line.description,
-      qty: line.qty,
-      unit_price: line.unit_price,
-      vat_rate: 0,
-      sort_order: line.sort_order ?? index,
-    })),
+    parsed.data.lines.map((line, index) => lineInsert(doc.id, line, index)),
   );
   if (linesError) return { ok: false, error: linesError.message };
 
@@ -173,7 +189,11 @@ export async function updateDocument(
   const { supabase } = await requireUser();
   const dueOrValid =
     parsed.data.type === "invoice"
-      ? null
+      ? await defaultInvoiceDueDate(
+          supabase,
+          parsed.data.issue_date,
+          parsed.data.due_or_valid_until,
+        )
       : parsed.data.due_or_valid_until || null;
   const totals = calcDocumentTotals(
     parsed.data.lines.map((line) => ({
@@ -202,14 +222,7 @@ export async function updateDocument(
 
   await supabase.from("document_lines").delete().eq("document_id", id);
   const { error: linesError } = await supabase.from("document_lines").insert(
-    parsed.data.lines.map((line, index) => ({
-      document_id: id,
-      description: line.description,
-      qty: line.qty,
-      unit_price: line.unit_price,
-      vat_rate: 0,
-      sort_order: line.sort_order ?? index,
-    })),
+    parsed.data.lines.map((line, index) => lineInsert(id, line, index)),
   );
   if (linesError) return { ok: false, error: linesError.message };
 
@@ -229,7 +242,6 @@ export async function updateDocumentStatus(
     .update({ status, updated_at: new Date().toISOString() })
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  await syncDocumentTotalsFromLines(supabase, id);
   revalidatePath("/documents");
   revalidatePath(`/documents/${id}`);
   revalidatePath("/dashboard");
@@ -280,12 +292,15 @@ export async function duplicateDocument(id: string): Promise<ActionResult> {
       client_id: source.client_id,
       issue_date: todayIsoDate(),
       due_or_valid_until:
-        source.type === "invoice" ? null : source.due_or_valid_until,
+        source.type === "invoice"
+          ? await defaultInvoiceDueDate(supabase, todayIsoDate(), null)
+          : source.due_or_valid_until,
       notes: source.notes,
       subtotal: totals.subtotal,
       vat_total: 0,
       total: totals.total,
       source_quote_id: null,
+      public_token: source.type === "invoice" ? newPublicToken() : null,
     })
     .select("id")
     .single();
@@ -303,6 +318,7 @@ export async function duplicateDocument(id: string): Promise<ActionResult> {
         unit_price: line.unit_price,
         vat_rate: 0,
         sort_order: line.sort_order ?? index,
+        done_date: line.done_date ?? null,
       })),
     );
     if (linesError) return { ok: false, error: linesError.message };
@@ -334,6 +350,7 @@ export async function convertQuoteToInvoice(quoteId: string): Promise<ActionResu
   }
 
   const issueDate = todayIsoDate();
+  const due = await defaultInvoiceDueDate(supabase, issueDate, null);
 
   const lines = (quote.document_lines ?? []).sort(
     (a, b) => a.sort_order - b.sort_order,
@@ -354,12 +371,13 @@ export async function convertQuoteToInvoice(quoteId: string): Promise<ActionResu
       status: "draft",
       client_id: quote.client_id,
       issue_date: issueDate,
-      due_or_valid_until: null,
+      due_or_valid_until: due,
       notes: quote.notes,
       subtotal: totals.subtotal,
       vat_total: 0,
       total: totals.total,
       source_quote_id: quote.id,
+      public_token: newPublicToken(),
     })
     .select("id")
     .single();
@@ -377,6 +395,7 @@ export async function convertQuoteToInvoice(quoteId: string): Promise<ActionResu
         unit_price: line.unit_price,
         vat_rate: 0,
         sort_order: line.sort_order ?? index,
+        done_date: line.done_date ?? null,
       })),
     );
     if (linesError) return { ok: false, error: linesError.message };

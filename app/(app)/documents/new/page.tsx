@@ -17,19 +17,26 @@ function addDays(iso: string, days: number) {
 export default async function NewDocumentPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; client_id?: string }>;
+  searchParams: Promise<{ type?: string }>;
 }) {
-  const { type: typeParam, client_id: clientIdParam } = await searchParams;
+  const { type: typeParam } = await searchParams;
   const type = documentTypeFromParam(typeParam) ?? "invoice";
   if (!documentTypeFromParam(typeParam)) {
     redirect(`/documents/new?type=${type}`);
   }
 
   const { supabase } = await requireUser();
-  const [{ data: clients }, { data: settings }] = await Promise.all([
-    supabase.from("clients").select("*").order("name"),
-    supabase.from("company_settings").select("*").limit(1).maybeSingle(),
-  ]);
+  const [{ data: clients }, { data: settings }, { data: catalogItems }] =
+    await Promise.all([
+      supabase.from("clients").select("*").order("name"),
+      supabase.from("company_settings").select("*").limit(1).maybeSingle(),
+      supabase
+        .from("catalog_items")
+        .select("*")
+        .eq("active", true)
+        .order("sort_order")
+        .order("name"),
+    ]);
 
   const issue = todayIsoDate();
   let defaultDue = "";
@@ -37,6 +44,11 @@ export default async function NewDocumentPage({
     defaultDue = addDays(
       issue,
       settings?.default_quote_validity_days ?? 30,
+    );
+  } else if (type === "invoice") {
+    defaultDue = addDays(
+      issue,
+      settings?.default_payment_terms_days ?? 14,
     );
   }
 
@@ -54,8 +66,8 @@ export default async function NewDocumentPage({
         mode="create"
         documentType={type}
         clients={clients ?? []}
+        catalogItems={catalogItems ?? []}
         defaultDueOrValid={defaultDue}
-        defaultClientId={clientIdParam}
       />
     </div>
   );

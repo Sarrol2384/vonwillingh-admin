@@ -1,14 +1,54 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ShaderBackground } from "@/components/effects/shader-background";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+
+const pageStyle: React.CSSProperties = {
+  minHeight: "100vh",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "#f4f1ea",
+  padding: 24,
+  fontFamily: "system-ui, sans-serif",
+  color: "#1e3a5f",
+};
+
+const cardStyle: React.CSSProperties = {
+  width: "100%",
+  maxWidth: 420,
+  background: "#ffffff",
+  border: "1px solid #c5d0de",
+  borderRadius: 12,
+  padding: 24,
+  boxShadow: "0 8px 24px rgba(30, 58, 95, 0.08)",
+};
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  height: 40,
+  border: "1px solid #cbd5e1",
+  borderRadius: 8,
+  padding: "0 12px",
+  fontSize: 14,
+  color: "#1e3a5f",
+  background: "#fff",
+  boxSizing: "border-box",
+};
+
+const buttonStyle: React.CSSProperties = {
+  width: "100%",
+  height: 40,
+  border: 0,
+  borderRadius: 8,
+  background: "#1e3a5f",
+  color: "#fff",
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
+};
 
 function LoginForm() {
   const router = useRouter();
@@ -49,8 +89,22 @@ function LoginForm() {
       router.replace(safeRedirect === "/" ? "/dashboard" : safeRedirect);
       router.refresh();
     } catch (err) {
+      const raw = err instanceof Error ? err.message : "Invalid email or password";
+      const host = (() => {
+        try {
+          return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").host;
+        } catch {
+          return "";
+        }
+      })();
+      const isNetwork =
+        raw === "Failed to fetch" ||
+        raw.toLowerCase().includes("failed to fetch") ||
+        raw.toLowerCase().includes("networkerror");
       setMessage(
-        err instanceof Error ? err.message : "Invalid email or password",
+        isNetwork
+          ? `Cannot reach Supabase${host ? ` (${host})` : ""}. Check Vercel env vars match the new project, redeploy, and confirm the project is not paused.`
+          : raw,
       );
     } finally {
       setLoading(false);
@@ -58,80 +112,81 @@ function LoginForm() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden p-6">
-      <ShaderBackground
-        hue={215}
-        speed={0.35}
-        intensity={1.1}
-        complexity={5}
-        interactive
-        overlayClassName="from-slate-950/20 via-slate-900/35 to-slate-950/55"
-      />
+    <div style={pageStyle}>
+      <div style={cardStyle}>
+        <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>Sign in</h1>
+        <p style={{ margin: "0 0 20px", color: "#64748b", fontSize: 14 }}>
+          VonWillingh Admin — invoices & quotes
+        </p>
 
-      <div className="relative z-10 w-full max-w-md">
-        <div className="rounded-2xl border border-white/20 bg-white/75 p-8 shadow-2xl shadow-primary/10 backdrop-blur-xl dark:bg-slate-950/70">
-          <div className="mb-6 flex flex-col items-center text-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/brand/logo.png"
-              alt="VonWillingh Online"
-              className="mb-3 h-20 w-auto"
-            />
-            <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Clients & documents — quotes, invoices, agreements
-            </p>
-          </div>
-
-          {(error === "supabase_not_configured" || !supabaseConfigured) && (
-            <p className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              Supabase is not configured. Open <code>.env.local</code>, add your
-              project URL and anon key, then restart the dev server.
-            </p>
-          )}
-
-          {message ? (
-            <p className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {message}
-            </p>
-          ) : null}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                className="bg-white/80"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-                className="bg-white/80"
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Signing in…" : "Sign in"}
-            </Button>
-          </form>
-
-          <p className="mt-4 text-center text-xs text-muted-foreground">
-            <Link href="/demo/shader" className="underline hover:text-foreground">
-              Preview shader effect
-            </Link>
+        {(error === "supabase_not_configured" || !supabaseConfigured) && (
+          <p
+            style={{
+              marginBottom: 16,
+              padding: 12,
+              background: "#fef2f2",
+              color: "#b91c1c",
+              borderRadius: 8,
+              fontSize: 13,
+            }}
+          >
+            Supabase is not configured. Open <code>.env.local</code>, add your
+            project URL and anon key, then restart the dev server.
           </p>
-        </div>
+        )}
+
+        {message && (
+          <p
+            style={{
+              marginBottom: 16,
+              padding: 12,
+              background: "#fef2f2",
+              color: "#b91c1c",
+              borderRadius: 8,
+              fontSize: 13,
+            }}
+          >
+            {message}
+          </p>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          <label
+            htmlFor="email"
+            style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 600 }}
+          >
+            Email
+          </label>
+          <input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+            style={{ ...inputStyle, marginBottom: 14 }}
+          />
+
+          <label
+            htmlFor="password"
+            style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 600 }}
+          >
+            Password
+          </label>
+          <input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+            style={{ ...inputStyle, marginBottom: 18 }}
+          />
+
+          <button type="submit" disabled={loading} style={buttonStyle}>
+            {loading ? "Signing in…" : "Sign in"}
+          </button>
+        </form>
       </div>
     </div>
   );
@@ -141,8 +196,8 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center">
-          <p className="text-muted-foreground">Loading sign-in…</p>
+        <div style={pageStyle}>
+          <p>Loading sign-in…</p>
         </div>
       }
     >

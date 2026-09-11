@@ -4,13 +4,17 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   FileText,
+  FileSignature,
   LayoutDashboard,
   LogOut,
+  Package,
   Receipt,
   Settings,
   Users,
   FileMinus2,
-  FileSignature,
+  Scale,
+  ScrollText,
+  Wallet,
 } from "lucide-react";
 import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
@@ -20,6 +24,11 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 const links = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/clients", label: "Clients", icon: Users },
+  { href: "/balances", label: "Balances", icon: Scale },
+  { href: "/statements", label: "Statements", icon: ScrollText },
+  { href: "/contracts", label: "Contracts", icon: FileSignature },
+  { href: "/payments", label: "Payments", icon: Wallet },
+  { href: "/items", label: "Items", icon: Package },
   { href: "/documents?type=quote", label: "Quotes", icon: FileText, type: "quote" },
   {
     href: "/documents?type=invoice",
@@ -32,12 +41,6 @@ const links = [
     label: "Credit notes",
     icon: FileMinus2,
     type: "credit_note",
-  },
-  {
-    href: "/client-documents?type=service_agreement",
-    label: "Agreements",
-    icon: FileSignature,
-    match: "/client-documents",
   },
   { href: "/settings", label: "Settings", icon: Settings },
 ] as const;
@@ -53,8 +56,6 @@ function NavLinks() {
         let active = false;
         if (link.href === "/dashboard") {
           active = pathname === "/dashboard";
-        } else if ("match" in link && link.match) {
-          active = pathname.startsWith(link.match);
         } else if ("type" in link && link.type) {
           active = pathname.startsWith("/documents") && currentType === link.type;
         } else {
@@ -92,7 +93,7 @@ export function AppNav() {
   }
 
   return (
-    <aside className="no-print relative z-10 flex w-56 shrink-0 flex-col border-r border-sidebar-border/70 bg-sidebar/75 text-sidebar-foreground backdrop-blur-xl">
+    <aside className="no-print flex w-56 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground">
       <div className="border-b border-sidebar-border p-4">
         <Link href="/dashboard" className="flex items-center gap-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -102,7 +103,9 @@ export function AppNav() {
             className="h-16 w-auto"
           />
         </Link>
-        <p className="mt-2 text-xs text-muted-foreground">Clients & Documents</p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Billing, contracts & payments
+        </p>
       </div>
       <Suspense fallback={<div className="flex-1 p-2" />}>
         <NavLinks />

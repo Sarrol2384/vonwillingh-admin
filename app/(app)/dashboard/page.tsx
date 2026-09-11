@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
-import { formatDate, formatZar, totalFromDocumentLines } from "@/lib/money";
+import { formatDate, formatZar } from "@/lib/money";
 import { DOCUMENT_TYPE_LABELS } from "@/lib/documents";
+import { calcOutstanding } from "@/lib/payments";
 import { LinkButton } from "@/components/ui/link-button";
+import { RunBillingButton } from "@/components/contracts/run-billing-button";
 import {
   Card,
   CardContent,
@@ -18,8 +20,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { DocumentStatusSelect } from "@/components/documents/document-status-select";
 import {
+  DocumentStatusBadge,
   DocumentTypeBadge,
 } from "@/components/documents/status-badge";
 
@@ -30,8 +32,11 @@ export default async function DashboardPage() {
     { count: clientCount },
     { count: quoteCount },
     { count: invoiceCount },
-    { count: agreementCount },
+    { count: activeContracts },
     { data: recent },
+    { data: recentPayments },
+    { data: invoices },
+    { data: allocatedPayments },
   ] = await Promise.all([
     supabase.from("clients").select("*", { count: "exact", head: true }),
     supabase
@@ -43,15 +48,30 @@ export default async function DashboardPage() {
       .select("*", { count: "exact", head: true })
       .eq("type", "invoice"),
     supabase
-      .from("client_documents")
+      .from("contracts")
       .select("*", { count: "exact", head: true })
-      .eq("type", "service_agreement"),
+      .eq("status", "active"),
     supabase
       .from("documents")
-      .select("*, clients(name, business_name), document_lines(qty, unit_price)")
+      .select("*, clients(name, business_name)")
       .order("created_at", { ascending: false })
       .limit(8),
+    supabase
+      .from("payments")
+      .select("*, clients(name, business_name)")
+      .order("paid_at", { ascending: false })
+      .limit(5),
+    supabase
+      .from("documents")
+      .select("id, total, status")
+      .eq("type", "invoice")
+      .neq("status", "void"),
+    supabase
+      .from("payments")
+      .select("amount, document_id"),
   ]);
+
+  const outstanding = calcOutstanding(invoices ?? [], allocatedPayments ?? []);
 
   return (
     <div className="space-y-6">
@@ -59,22 +79,19 @@ export default async function DashboardPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
           <p className="text-sm text-muted-foreground">
-            Manage clients and download Word documents for quotes, agreements, and
-            more.
+            Invoices, recurring contracts, and client payments.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <LinkButton href="/clients/new" variant="outline">
-            New client
-          </LinkButton>
-          <LinkButton href="/documents/new?type=quote" variant="outline">
-            New quote
+          <RunBillingButton label="Run contract billing" />
+          <LinkButton href="/payments/new" variant="outline">
+            Record payment
           </LinkButton>
           <LinkButton href="/documents/new?type=invoice">New invoice</LinkButton>
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader>
             <CardDescription>Clients</CardDescription>
@@ -83,8 +100,8 @@ export default async function DashboardPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardDescription>Quotes</CardDescription>
-            <CardTitle className="text-3xl">{quoteCount ?? 0}</CardTitle>
+            <CardDescription>Active contracts</CardDescription>
+            <CardTitle className="text-3xl">{activeContracts ?? 0}</CardTitle>
           </CardHeader>
         </Card>
         <Card>
@@ -95,89 +112,120 @@ export default async function DashboardPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardDescription>Agreements</CardDescription>
-            <CardTitle className="text-3xl">{agreementCount ?? 0}</CardTitle>
+            <CardDescription>Outstanding</CardDescription>
+            <CardTitle className="text-3xl tabular-nums">
+              {formatZar(outstanding)}
+            </CardTitle>
           </CardHeader>
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent documents</CardTitle>
-          <CardDescription>Latest quotes, invoices, and credit notes</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {!recent?.length ? (
-            <p className="text-sm text-muted-foreground">
-              No documents yet.{" "}
-              <Link href="/documents/new?type=invoice" className="underline">
-                Create your first invoice
-              </Link>
-              .
-            </p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Number</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recent.map((doc) => {
-                  const client = doc.clients as {
-                    name: string;
-                    business_name: string;
-                  } | null;
-                  const clientLabel =
-                    client?.business_name?.trim() || client?.name || "—";
-                  return (
-                  <TableRow key={doc.id}>
-                    <TableCell>
-                      <Link
-                        href={`/documents/${doc.id}`}
-                        className="font-medium hover:underline"
-                      >
-                        {doc.number}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <DocumentTypeBadge type={doc.type} />
-                    </TableCell>
-                    <TableCell>{clientLabel}</TableCell>
-                    <TableCell>{formatDate(doc.issue_date)}</TableCell>
-                    <TableCell>
-                      <DocumentStatusSelect
-                        id={doc.id}
-                        type={doc.type}
-                        status={doc.status}
-                      />
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatZar(
-                        totalFromDocumentLines(
-                          (doc.document_lines as { qty: number; unit_price: number }[]) ??
-                            [],
-                        ),
-                      )}
-                    </TableCell>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent payments</CardTitle>
+            <CardDescription>Latest money received from clients</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!recentPayments?.length ? (
+              <p className="text-sm text-muted-foreground">
+                No payments yet.{" "}
+                <Link href="/payments/new" className="underline">
+                  Record a payment
+                </Link>
+                .
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Client</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
                   </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+                </TableHeader>
+                <TableBody>
+                  {recentPayments.map((payment) => {
+                    const client = payment.clients as {
+                      name: string;
+                      business_name: string;
+                    } | null;
+                    const label =
+                      client?.business_name?.trim() || client?.name || "—";
+                    return (
+                      <TableRow key={payment.id}>
+                        <TableCell>{formatDate(payment.paid_at)}</TableCell>
+                        <TableCell>{label}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatZar(Number(payment.amount))}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent documents</CardTitle>
+            <CardDescription>
+              Latest quotes, invoices, and credit notes
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!recent?.length ? (
+              <p className="text-sm text-muted-foreground">
+                No documents yet.{" "}
+                <Link href="/documents/new?type=invoice" className="underline">
+                  Create your first invoice
+                </Link>
+                .
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Number</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {recent.map((doc) => (
+                    <TableRow key={doc.id}>
+                      <TableCell>
+                        <Link
+                          href={`/documents/${doc.id}`}
+                          className="font-medium hover:underline"
+                        >
+                          {doc.number}
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        <DocumentTypeBadge type={doc.type} />
+                      </TableCell>
+                      <TableCell>
+                        <DocumentStatusBadge status={doc.status} />
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatZar(Number(doc.total))}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <p className="text-xs text-muted-foreground">
-        Tip: open a document or client workspace and use Download Word to edit in
-        Microsoft Word, then export PDF from there. Print / PDF is still available
-        as a quick fallback.
+        Quotes on file: {quoteCount ?? 0}. Document types:{" "}
+        {Object.values(DOCUMENT_TYPE_LABELS).join(", ")}.
       </p>
     </div>
   );

@@ -1,34 +1,38 @@
-import Link from "next/link";
-import { ShaderBackground } from "@/components/effects/shader-background";
-import { LinkButton } from "@/components/ui/link-button";
-
 export default function HomePage() {
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center gap-4 overflow-hidden p-6">
-      <ShaderBackground
-        hue={220}
-        speed={0.3}
-        intensity={0.95}
-        interactive
-        overlayClassName="from-background/40 via-background/55 to-background/70"
-      />
-      <div className="relative z-10 flex flex-col items-center gap-4 text-center">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/brand/logo.png" alt="VonWillingh Online" className="h-24 w-auto" />
-        <h1 className="text-3xl font-semibold tracking-tight">VonWillingh Admin</h1>
-        <p className="max-w-md text-muted-foreground">
-          Clients, quotes, invoices, agreements — with Word export built in.
-        </p>
-        <LinkButton href="/login" size="lg">
-          Go to sign in
-        </LinkButton>
-        <Link
-          href="/demo/shader"
-          className="text-sm text-muted-foreground underline hover:text-foreground"
-        >
-          Preview background effect
-        </Link>
-      </div>
-    </div>
+    <main
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 16,
+        background: "#f4f1ea",
+        color: "#1e3a5f",
+        fontFamily: "system-ui, sans-serif",
+        padding: 24,
+      }}
+    >
+      <h1 style={{ margin: 0, fontSize: 28 }}>VonWillingh Admin</h1>
+      <p style={{ margin: 0, color: "#64748b" }}>Invoices & quotes</p>
+      <a
+        href="/login"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          height: 40,
+          padding: "0 18px",
+          borderRadius: 8,
+          background: "#1e3a5f",
+          color: "#fff",
+          textDecoration: "none",
+          fontWeight: 600,
+        }}
+      >
+        Go to sign in
+      </a>
+    </main>
   );
 }

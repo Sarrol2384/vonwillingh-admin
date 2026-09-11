@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Copy, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LinkButton } from "@/components/ui/link-button";
-import { DownloadWordButton } from "@/components/documents/download-word-button";
+import { SendInvoiceButton } from "@/components/documents/send-invoice-button";
 import {
   convertQuoteToInvoice,
   deleteDocument,
@@ -57,11 +57,21 @@ export function DocumentActions({ document }: { document: Document }) {
 
   return (
     <div className="no-print flex flex-wrap items-center gap-2">
-      <DownloadWordButton kind={document.type} id={document.id} />
       <LinkButton href={`/documents/${document.id}/print`} variant="outline">
         <Printer className="mr-1 h-4 w-4" />
         Print / PDF
       </LinkButton>
+      {document.type === "invoice" && document.status !== "void" ? (
+        <SendInvoiceButton documentId={document.id} />
+      ) : null}
+      {document.type === "invoice" && document.status !== "void" ? (
+        <LinkButton
+          href={`/payments/new?client_id=${document.client_id}&document_id=${document.id}`}
+          variant="outline"
+        >
+          Record payment
+        </LinkButton>
+      ) : null}
       <Button variant="outline" disabled={pending} onClick={handleDuplicate}>
         <Copy className="mr-1 h-4 w-4" />
         Duplicate

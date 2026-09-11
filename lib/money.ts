@@ -63,16 +63,3 @@ export function calcDocumentTotals(lines: LineInput[]) {
 export function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
-
-/** Line amounts are excl. VAT — matches editor, print, and Word export. */
-export function totalFromDocumentLines(
-  lines: { qty: number | string; unit_price: number | string; vat_rate?: number | string }[],
-) {
-  return calcDocumentTotals(
-    lines.map((line) => ({
-      qty: Number(line.qty) || 0,
-      unit_price: Number(line.unit_price) || 0,
-      vat_rate: 0,
-    })),
-  ).total;
-}

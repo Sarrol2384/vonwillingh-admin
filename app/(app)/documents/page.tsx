@@ -4,7 +4,7 @@ import {
   documentTypeFromParam,
   DOCUMENT_TYPE_LABELS,
 } from "@/lib/documents";
-import { formatDate, formatZar, totalFromDocumentLines } from "@/lib/money";
+import { formatDate, formatZar } from "@/lib/money";
 import { LinkButton } from "@/components/ui/link-button";
 import {
   Table,
@@ -14,8 +14,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { DocumentStatusSelect } from "@/components/documents/document-status-select";
-import { DocumentTypeBadge } from "@/components/documents/status-badge";
+import {
+  DocumentStatusBadge,
+  DocumentTypeBadge,
+} from "@/components/documents/status-badge";
 
 export default async function DocumentsPage({
   searchParams,
@@ -28,7 +30,7 @@ export default async function DocumentsPage({
 
   let query = supabase
     .from("documents")
-    .select("*, clients(name, business_name), document_lines(qty, unit_price)")
+    .select("*, clients(name, business_name)")
     .order("issue_date", { ascending: false });
 
   if (type) {
@@ -104,19 +106,10 @@ export default async function DocumentsPage({
                 <TableCell>{clientLabel}</TableCell>
                 <TableCell>{formatDate(doc.issue_date)}</TableCell>
                 <TableCell>
-                  <DocumentStatusSelect
-                    id={doc.id}
-                    type={doc.type}
-                    status={doc.status}
-                  />
+                  <DocumentStatusBadge status={doc.status} />
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
-                  {formatZar(
-                    totalFromDocumentLines(
-                      (doc.document_lines as { qty: number; unit_price: number }[]) ??
-                        [],
-                    ),
-                  )}
+                  {formatZar(Number(doc.total))}
                 </TableCell>
               </TableRow>
               );

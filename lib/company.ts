@@ -1,7 +1,7 @@
 export const COMPANY_DEFAULTS = {
   company_name: "VonWillingh Online",
   contact_name: "Sarrol Von Willingh",
-  email: "sarrol@vonwillingh.co.za",
+  email: "admin@vonwillingh.co.za",
   phone: "081 216 3629",
   address: "177 Magdouw Street, Russel's Rest, Eerste River, 7100",
   website: "https://vonwillingh.co.za",

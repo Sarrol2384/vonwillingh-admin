@@ -21,6 +21,7 @@ import {
   todayIsoDate,
 } from "@/lib/money";
 import type {
+  CatalogItem,
   Client,
   Document,
   DocumentLine,
@@ -37,19 +38,23 @@ type LineDraft = {
   qty: string;
   unit_price: string;
   vat_rate: string;
+  done_date: string;
 };
+
+function emptyLine(): LineDraft {
+  return {
+    key: crypto.randomUUID(),
+    description: "",
+    qty: "1",
+    unit_price: "0",
+    vat_rate: String(DEFAULT_VAT_RATE),
+    done_date: "",
+  };
+}
 
 function toDraft(lines: DocumentLine[]): LineDraft[] {
   if (!lines.length) {
-    return [
-      {
-        key: crypto.randomUUID(),
-        description: "",
-        qty: "1",
-        unit_price: "0",
-        vat_rate: String(DEFAULT_VAT_RATE),
-      },
-    ];
+    return [emptyLine()];
   }
   return [...lines]
     .sort((a, b) => a.sort_order - b.sort_order)
@@ -59,6 +64,7 @@ function toDraft(lines: DocumentLine[]): LineDraft[] {
       qty: String(line.qty),
       unit_price: String(line.unit_price),
       vat_rate: String(line.vat_rate),
+      done_date: line.done_date ?? "",
     }));
 }
 
@@ -66,25 +72,23 @@ export function DocumentEditor({
   mode,
   documentType,
   clients,
+  catalogItems = [],
   document,
   lines = [],
   defaultDueOrValid,
-  defaultClientId,
 }: {
   mode: "create" | "edit";
   documentType: DocumentType;
   clients: Client[];
+  catalogItems?: CatalogItem[];
   document?: Document;
   lines?: DocumentLine[];
   defaultDueOrValid?: string;
-  defaultClientId?: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [type] = useState<DocumentType>(document?.type ?? documentType);
-  const [clientId, setClientId] = useState(
-    document?.client_id ?? defaultClientId ?? "",
-  );
+  const [clientId, setClientId] = useState(document?.client_id ?? "");
   const [status, setStatus] = useState<DocumentStatus>(
     document?.status ?? "draft",
   );
@@ -92,12 +96,11 @@ export function DocumentEditor({
     document?.issue_date ?? todayIsoDate(),
   );
   const [dueOrValid, setDueOrValid] = useState(
-    documentType === "invoice" || document?.type === "invoice"
-      ? ""
-      : (document?.due_or_valid_until ?? defaultDueOrValid ?? ""),
+    document?.due_or_valid_until ?? defaultDueOrValid ?? "",
   );
   const [notes, setNotes] = useState(document?.notes ?? "");
   const [lineItems, setLineItems] = useState<LineDraft[]>(() => toDraft(lines));
+  const [catalogPick, setCatalogPick] = useState("");
 
   const totals = useMemo(() => {
     return calcDocumentTotals(
@@ -110,6 +113,7 @@ export function DocumentEditor({
   }, [lineItems]);
 
   const statusOptions = statusesForType(type);
+  const activeCatalog = catalogItems.filter((item) => item.active);
 
   function updateLine(key: string, patch: Partial<LineDraft>) {
     setLineItems((prev) =>
@@ -118,16 +122,39 @@ export function DocumentEditor({
   }
 
   function addLine() {
-    setLineItems((prev) => [
-      ...prev,
-      {
+    setLineItems((prev) => [...prev, emptyLine()]);
+  }
+
+  function addFromCatalog(itemId: string) {
+    const item = activeCatalog.find((entry) => entry.id === itemId);
+    if (!item) return;
+
+    setLineItems((prev) => {
+      const blankIndex = prev.findIndex(
+        (line) => !line.description.trim() && Number(line.unit_price) === 0,
+      );
+      const nextLine: LineDraft = {
         key: crypto.randomUUID(),
-        description: "",
+        description: item.name,
         qty: "1",
-        unit_price: "0",
+        unit_price: String(item.unit_price),
         vat_rate: String(DEFAULT_VAT_RATE),
-      },
-    ]);
+        done_date: "",
+      };
+      if (blankIndex >= 0) {
+        return prev.map((line, index) =>
+          index === blankIndex
+            ? {
+                ...line,
+                description: item.name,
+                unit_price: String(item.unit_price),
+              }
+            : line,
+        );
+      }
+      return [...prev, nextLine];
+    });
+    setCatalogPick("");
   }
 
   function removeLine(key: string) {
@@ -152,10 +179,7 @@ export function DocumentEditor({
     formData.set("client_id", clientId);
     formData.set("status", status);
     formData.set("issue_date", issueDate);
-    formData.set(
-      "due_or_valid_until",
-      type === "invoice" ? "" : dueOrValid,
-    );
+    formData.set("due_or_valid_until", dueOrValid);
     formData.set("notes", notes);
     formData.set(
       "lines",
@@ -166,6 +190,7 @@ export function DocumentEditor({
           unit_price: Number(l.unit_price) || 0,
           vat_rate: 0,
           sort_order: index,
+          done_date: l.done_date.trim() || null,
         })),
       ),
     );
@@ -187,7 +212,12 @@ export function DocumentEditor({
     });
   }
 
-  const dueLabel = type === "quote" ? "Valid until" : "Date";
+  const dueLabel =
+    type === "quote"
+      ? "Valid until"
+      : type === "invoice"
+        ? "Due date"
+        : "Date";
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -240,7 +270,7 @@ export function DocumentEditor({
             required
           />
         </div>
-        {type !== "invoice" ? (
+        {type !== "credit_note" ? (
           <div className="space-y-2">
             <Label htmlFor="due_or_valid_until">{dueLabel}</Label>
             <Input
@@ -254,18 +284,44 @@ export function DocumentEditor({
       </div>
 
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <Label>Line items</Label>
-          <Button type="button" variant="outline" size="sm" onClick={addLine}>
-            <Plus className="mr-1 h-4 w-4" />
-            Add line
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {activeCatalog.length ? (
+              <select
+                className={`${selectClassName} w-auto min-w-[12rem]`}
+                value={catalogPick}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value) addFromCatalog(value);
+                }}
+                aria-label="Select catalog item"
+              >
+                <option value="">Select item…</option>
+                {activeCatalog.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name} — {formatZar(Number(item.unit_price))}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            <Button type="button" variant="outline" size="sm" onClick={addLine}>
+              <Plus className="mr-1 h-4 w-4" />
+              Add line
+            </Button>
+          </div>
         </div>
+        {!activeCatalog.length ? (
+          <p className="text-xs text-muted-foreground">
+            Tip: add reusable items under Items to pick them here with prices.
+          </p>
+        ) : null}
         <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full min-w-[640px] text-sm">
+          <table className="w-full min-w-[760px] text-sm">
             <thead className="bg-muted/50 text-left">
               <tr>
                 <th className="p-2 font-medium">Description</th>
+                <th className="w-36 p-2 font-medium">Done</th>
                 <th className="w-24 p-2 font-medium">Qty</th>
                 <th className="w-32 p-2 font-medium">Unit price</th>
                 <th className="w-32 p-2 font-medium text-right">Amount</th>
@@ -289,6 +345,16 @@ export function DocumentEditor({
                         }
                         placeholder="Service or product"
                         required
+                      />
+                    </td>
+                    <td className="p-2">
+                      <Input
+                        type="date"
+                        value={line.done_date}
+                        onChange={(e) =>
+                          updateLine(line.key, { done_date: e.target.value })
+                        }
+                        aria-label="Done date"
                       />
                     </td>
                     <td className="p-2">
