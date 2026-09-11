@@ -1,5 +1,7 @@
 export type DocumentType = "quote" | "invoice" | "credit_note";
 
+export type ClientDocumentType = "service_agreement" | "discovery_brief";
+
 export type DocumentStatus =
   | "draft"
   | "sent"
@@ -146,6 +148,47 @@ export type Database = {
           updated_at?: string;
         };
         Relationships: [];
+      };
+      client_documents: {
+        Row: {
+          id: string;
+          client_id: string;
+          type: ClientDocumentType;
+          title: string;
+          status: string;
+          content: Json;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          type: ClientDocumentType;
+          title: string;
+          status?: string;
+          content?: Json;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          type?: ClientDocumentType;
+          title?: string;
+          status?: string;
+          content?: Json;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "client_documents_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       contracts: {
         Row: {
@@ -501,6 +544,7 @@ export type Database = {
     Enums: {
       document_type: DocumentType;
       document_status: DocumentStatus;
+      client_document_type: ClientDocumentType;
       payment_method: PaymentMethod;
       contract_status: ContractStatus;
       billing_cadence: BillingCadence;
@@ -514,6 +558,7 @@ export type CompanySettings =
 export type Client = Database["public"]["Tables"]["clients"]["Row"];
 export type Document = Database["public"]["Tables"]["documents"]["Row"];
 export type DocumentLine = Database["public"]["Tables"]["document_lines"]["Row"];
+export type ClientDocument = Database["public"]["Tables"]["client_documents"]["Row"];
 export type CatalogItem = Database["public"]["Tables"]["catalog_items"]["Row"];
 export type Contract = Database["public"]["Tables"]["contracts"]["Row"];
 export type ContractLine = Database["public"]["Tables"]["contract_lines"]["Row"];
@@ -523,6 +568,10 @@ export type InvoiceSend = Database["public"]["Tables"]["invoice_sends"]["Row"];
 export type DocumentWithRelations = Document & {
   clients: Client | null;
   document_lines: DocumentLine[];
+};
+
+export type ClientDocumentWithRelations = ClientDocument & {
+  clients: Client | null;
 };
 
 export type ContractWithRelations = Contract & {
