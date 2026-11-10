@@ -39,6 +39,8 @@ export function PrintDocument({
   const title = DOCUMENT_TYPE_LABELS[document.type];
   const showValidity =
     document.type === "quote" && Boolean(document.due_or_valid_until);
+  const showDueDate =
+    document.type === "invoice" && Boolean(document.due_or_valid_until);
 
   return (
     <article className="letterhead-sheet mx-auto max-w-[210mm] text-[12px] print:max-w-none">
@@ -72,6 +74,14 @@ export function PrintDocument({
               {showValidity ? (
                 <div>
                   <dt className="inline">Valid until: </dt>
+                  <dd className="inline">
+                    {formatDate(document.due_or_valid_until)}
+                  </dd>
+                </div>
+              ) : null}
+              {showDueDate ? (
+                <div>
+                  <dt className="inline">Due date: </dt>
                   <dd className="inline">
                     {formatDate(document.due_or_valid_until)}
                   </dd>
