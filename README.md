@@ -25,6 +25,9 @@ Invoices, quotes, credit notes, recurring contracts, payments, and Brevo invoice
    - [`supabase/migrations/003_line_done_date_and_catalog.sql`](supabase/migrations/003_line_done_date_and_catalog.sql)
    - [`supabase/migrations/004_seed_catalog_from_website.sql`](supabase/migrations/004_seed_catalog_from_website.sql) optional catalog seed
    - [`supabase/migrations/005_payments_contracts.sql`](supabase/migrations/005_payments_contracts.sql) **payments, contracts, invoice email log**
+   - [`supabase/migrations/006_public_invoice_anon_lockdown.sql`](supabase/migrations/006_public_invoice_anon_lockdown.sql) **stop the anon key reading invoices, clients, and bank details**
+
+   Run migration 006 only after this app version is deployed and `SUPABASE_SERVICE_ROLE_KEY` is set on the server. Steps are in [Public invoice links](#public-invoice-links).
 
 5. Create an Auth user in Supabase (Authentication → Users) if you have not already.
 
@@ -44,7 +47,7 @@ Invoices, quotes, credit notes, recurring contracts, payments, and Brevo invoice
 - **Payments ledger** — record EFT/cash/card payments; allocate to invoices; auto-mark paid when balance is covered
 - **Recurring contracts** — monthly / quarterly / yearly; generate invoices on schedule
 - **Brevo email** — send invoices to clients; contracts with auto-send email when billed
-- Public invoice link for clients (`/invoice/[token]`)
+- Public invoice link for clients (`/invoice/[token]`) — one invoice per token, loaded on the server
 - Print / Save as PDF (browser print, A4 letterhead)
 - Quote → invoice conversion and document duplicate
 - Company settings (CIPC, bank details, payment terms, letterhead)
@@ -70,13 +73,27 @@ Invoices, quotes, credit notes, recurring contracts, payments, and Brevo invoice
 
 - Local / manual: click **Run contract billing** while signed in.
 - Production (Vercel): [`vercel.json`](vercel.json) runs `GET /api/billing/run` daily at 06:00 UTC.
-- Set `CRON_SECRET` and `SUPABASE_SERVICE_ROLE_KEY` in the host environment.
+- Set `CRON_SECRET` and `SUPABASE_SERVICE_ROLE_KEY` in the host environment. The same service role key is what `/invoice/[token]` uses to load a single invoice. Do not prefix it with `NEXT_PUBLIC_`.
 - Vercel sends `Authorization: Bearer <CRON_SECRET>` when `CRON_SECRET` is configured.
 - Manual trigger:
 
   ```bash
   curl -H "Authorization: Bearer YOUR_CRON_SECRET" https://your-app.vercel.app/api/billing/run
   ```
+
+## Public invoice links
+
+A client opens `/invoice/[token]` from the email. The page still shows the same invoice: line items, the client name and contact details printed on the bill, and the company and bank details. The server loads that one invoice with `SUPABASE_SERVICE_ROLE_KEY`. The anon key cannot list documents, clients, or company settings.
+
+Apply the lockdown once per Supabase project:
+
+1. In Supabase → Project Settings → API, copy the **service_role** key into `SUPABASE_SERVICE_ROLE_KEY` on the server (`.env.local` and the host, such as Vercel). Leave the anon key in `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Do not put the service role key in a `NEXT_PUBLIC_` variable.
+2. Deploy this version of the app, so `/invoice/[token]` reads through the service role.
+3. In the Supabase SQL Editor, paste and run [`supabase/migrations/006_public_invoice_anon_lockdown.sql`](supabase/migrations/006_public_invoice_anon_lockdown.sql) once. Do not edit or re-run the older migrations.
+4. Open an existing public invoice link and confirm it still shows that invoice.
+5. Optional: with the anon key, `GET /rest/v1/documents` and `GET /rest/v1/company_settings` should be rejected instead of returning rows.
+
+If step 3 runs before step 2, public links show “not found” until the new server is live.
 
 ## Syncing between PCs
 
