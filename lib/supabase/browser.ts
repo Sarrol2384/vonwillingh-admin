@@ -13,7 +13,6 @@ export function createSupabaseBrowserClient() {
 
   const url = supabaseUrl();
   try {
-    // eslint-disable-next-line no-new -- URL constructor validates shape
     new URL(url);
   } catch {
     throw new Error(
