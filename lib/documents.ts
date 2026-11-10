@@ -33,3 +33,25 @@ export function documentTypeFromParam(
   }
   return null;
 }
+
+/**
+ * Notes printed or emailed to a customer. The business is not VAT registered,
+ * so prices are the full amount and VAT wording must not appear.
+ * Known seed sentences are rewritten in place; any leftover line that still
+ * mentions VAT is dropped so older saved quotes stay clean.
+ */
+export function customerFacingNotes(notes: string | null | undefined): string {
+  if (!notes?.trim()) return "";
+
+  const cleaned = notes
+    .replace(/prices exclusive of vat unless otherwise stated\.?\s*/gi, "")
+    .replace(/\s+ex vat where marked/gi, "");
+
+  return cleaned
+    .split("\n")
+    .filter((line) => !/\bvat\b/i.test(line))
+    .join("\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}

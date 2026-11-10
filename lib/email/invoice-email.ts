@@ -2,6 +2,7 @@ import "server-only";
 
 import { formatDate, formatZar } from "@/lib/money";
 import { hasBankDetails } from "@/lib/company";
+import { customerFacingNotes } from "@/lib/documents";
 import type { Client, CompanySettings, Document, DocumentLine } from "@/lib/supabase/types";
 
 function escapeHtml(value: string): string {
@@ -21,6 +22,7 @@ export function buildInvoiceEmail(args: {
 }): { subject: string; htmlContent: string; textContent: string } {
   const { document, lines, client, settings, viewUrl } = args;
   const clientLabel = client.business_name?.trim() || client.name;
+  const notes = customerFacingNotes(document.notes);
   const subject = `Invoice ${document.number} from ${settings.company_name}`;
 
   const sortedLines = [...lines].sort((a, b) => a.sort_order - b.sort_order);
@@ -73,7 +75,7 @@ export function buildInvoiceEmail(args: {
   <p style="text-align:right;margin-top:12px"><strong>Total: ${escapeHtml(formatZar(Number(document.total)))}</strong></p>
   ${bankHtml}
   ${viewHtml}
-  ${document.notes?.trim() ? `<p style="margin-top:16px;white-space:pre-wrap">${escapeHtml(document.notes)}</p>` : ""}
+  ${notes ? `<p style="margin-top:16px;white-space:pre-wrap">${escapeHtml(notes)}</p>` : ""}
   <p style="margin-top:24px">Kind regards,<br/>${escapeHtml(settings.contact_name)}<br/>${escapeHtml(settings.company_name)}<br/>${escapeHtml(settings.email)}</p>
 </body>
 </html>`;
@@ -100,7 +102,7 @@ ${textLines}
 Total: ${formatZar(Number(document.total))}
 ${bankText}
 ${viewUrl ? `View invoice: ${viewUrl}\n` : ""}
-${document.notes?.trim() ? `\n${document.notes}\n` : ""}
+${notes ? `\n${notes}\n` : ""}
 Kind regards,
 ${settings.contact_name}
 ${settings.company_name}

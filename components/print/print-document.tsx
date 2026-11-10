@@ -1,5 +1,5 @@
 import { hasBankDetails } from "@/lib/company";
-import { DOCUMENT_TYPE_LABELS } from "@/lib/documents";
+import { customerFacingNotes, DOCUMENT_TYPE_LABELS } from "@/lib/documents";
 import {
   calcDocumentTotals,
   calcLineTotals,
@@ -17,16 +17,42 @@ import type {
   DocumentLine,
 } from "@/lib/supabase/types";
 
+export type PrintableDocument = Pick<
+  Document,
+  "type" | "number" | "issue_date" | "due_or_valid_until" | "notes"
+>;
+
+export type PrintableClient = Pick<
+  Client,
+  "name" | "business_name" | "address" | "email" | "phone"
+>;
+
+export type PrintableLine = Pick<
+  DocumentLine,
+  "id" | "description" | "qty" | "unit_price" | "sort_order" | "done_date"
+>;
+
+export type PrintableCompany = Pick<
+  CompanySettings,
+  | "company_name"
+  | "contact_name"
+  | "registration_number"
+  | "bank_name"
+  | "bank_account_name"
+  | "bank_account_number"
+  | "bank_branch_code"
+>;
+
 export function PrintDocument({
   document,
   client,
   lines,
   company,
 }: {
-  document: Document;
-  client: Client;
-  lines: DocumentLine[];
-  company: CompanySettings;
+  document: PrintableDocument;
+  client: PrintableClient;
+  lines: PrintableLine[];
+  company: PrintableCompany;
 }) {
   const sorted = [...lines].sort((a, b) => a.sort_order - b.sort_order);
   const totals = calcDocumentTotals(
@@ -37,8 +63,11 @@ export function PrintDocument({
     })),
   );
   const title = DOCUMENT_TYPE_LABELS[document.type];
+  const notes = customerFacingNotes(document.notes);
   const showValidity =
     document.type === "quote" && Boolean(document.due_or_valid_until);
+  const showDueDate =
+    document.type === "invoice" && Boolean(document.due_or_valid_until);
 
   return (
     <article className="letterhead-sheet mx-auto max-w-[210mm] text-[12px] print:max-w-none">
@@ -55,7 +84,6 @@ export function PrintDocument({
             {company.registration_number ? (
               <p>Reg: {company.registration_number}</p>
             ) : null}
-            {company.vat_number ? <p>VAT: {company.vat_number}</p> : null}
           </div>
           <div className="text-right">
             <h1 className="text-2xl font-bold tracking-tight text-[var(--lh-ink,#1a2a4e)]">
@@ -72,6 +100,14 @@ export function PrintDocument({
               {showValidity ? (
                 <div>
                   <dt className="inline">Valid until: </dt>
+                  <dd className="inline">
+                    {formatDate(document.due_or_valid_until)}
+                  </dd>
+                </div>
+              ) : null}
+              {showDueDate ? (
+                <div>
+                  <dt className="inline">Due date: </dt>
                   <dd className="inline">
                     {formatDate(document.due_or_valid_until)}
                   </dd>
@@ -155,14 +191,12 @@ export function PrintDocument({
           </dl>
         </div>
 
-        {document.notes ? (
+        {notes ? (
           <section className="mt-8">
             <h2 className="text-xs font-semibold tracking-wide text-neutral-500 uppercase">
               Notes
             </h2>
-            <p className="mt-1 whitespace-pre-wrap text-neutral-700">
-              {document.notes}
-            </p>
+            <p className="mt-1 whitespace-pre-wrap text-neutral-700">{notes}</p>
           </section>
         ) : null}
 

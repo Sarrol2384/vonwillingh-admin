@@ -2,7 +2,6 @@ import { Document, Footer, Header, PageNumber, Paragraph, TextRun, AlignmentType
 import type { Client, CompanySettings } from "@/lib/supabase/types";
 import type { AgreementContent } from "@/lib/client-documents";
 import {
-  ACCENT,
   FONT,
   MUTED,
   body,

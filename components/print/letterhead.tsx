@@ -1,11 +1,14 @@
-import type { CompanySettings } from "@/lib/supabase/types";
 import "@/app/letterhead.css";
 
 /**
  * Brand letterhead header — page 1 only (in document flow).
  * Visual matches the official VonWillingh Online letterhead template.
  */
-export function LetterheadHeader({ company }: { company: CompanySettings }) {
+export function LetterheadHeader({
+  company,
+}: {
+  company: { company_name: string };
+}) {
   return (
     <header className="letterhead-header" aria-label="Letterhead">
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -22,7 +25,11 @@ export function LetterheadHeader({ company }: { company: CompanySettings }) {
  * Brand letterhead footer — every printed page (fixed in print) + screen preview.
  * Includes contact strip and photo panels from the official template.
  */
-export function LetterheadFooter({ company }: { company: CompanySettings }) {
+export function LetterheadFooter({
+  company,
+}: {
+  company: { company_name: string };
+}) {
   return (
     <footer className="letterhead-footer" aria-label="Letterhead footer">
       {/* eslint-disable-next-line @next/next/no-img-element */}

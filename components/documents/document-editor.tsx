@@ -12,7 +12,11 @@ import {
   createDocument,
   updateDocument,
 } from "@/lib/actions/documents";
-import { statusesForType, DOCUMENT_TYPE_LABELS } from "@/lib/documents";
+import {
+  customerFacingNotes,
+  statusesForType,
+  DOCUMENT_TYPE_LABELS,
+} from "@/lib/documents";
 import {
   calcDocumentTotals,
   calcLineTotals,
@@ -98,7 +102,7 @@ export function DocumentEditor({
   const [dueOrValid, setDueOrValid] = useState(
     document?.due_or_valid_until ?? defaultDueOrValid ?? "",
   );
-  const [notes, setNotes] = useState(document?.notes ?? "");
+  const [notes, setNotes] = useState(customerFacingNotes(document?.notes));
   const [lineItems, setLineItems] = useState<LineDraft[]>(() => toDraft(lines));
   const [catalogPick, setCatalogPick] = useState("");
 

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { dueDateFromTerms, newPublicToken } from "@/lib/billing";
+import { customerFacingNotes } from "@/lib/documents";
 import { calcDocumentTotals, todayIsoDate } from "@/lib/money";
 import type { DocumentStatus, DocumentType } from "@/lib/supabase/types";
 
@@ -142,7 +143,7 @@ export async function createDocument(formData: FormData): Promise<ActionResult> 
       client_id: parsed.data.client_id,
       issue_date: parsed.data.issue_date,
       due_or_valid_until: dueOrValid,
-      notes: parsed.data.notes,
+      notes: customerFacingNotes(parsed.data.notes),
       subtotal: totals.subtotal,
       vat_total: 0,
       total: totals.total,
@@ -210,7 +211,7 @@ export async function updateDocument(
       client_id: parsed.data.client_id,
       issue_date: parsed.data.issue_date,
       due_or_valid_until: dueOrValid,
-      notes: parsed.data.notes,
+      notes: customerFacingNotes(parsed.data.notes),
       updated_at: new Date().toISOString(),
       subtotal: totals.subtotal,
       vat_total: 0,
@@ -295,7 +296,7 @@ export async function duplicateDocument(id: string): Promise<ActionResult> {
         source.type === "invoice"
           ? await defaultInvoiceDueDate(supabase, todayIsoDate(), null)
           : source.due_or_valid_until,
-      notes: source.notes,
+      notes: customerFacingNotes(source.notes),
       subtotal: totals.subtotal,
       vat_total: 0,
       total: totals.total,
@@ -372,7 +373,7 @@ export async function convertQuoteToInvoice(quoteId: string): Promise<ActionResu
       client_id: quote.client_id,
       issue_date: issueDate,
       due_or_valid_until: due,
-      notes: quote.notes,
+      notes: customerFacingNotes(quote.notes),
       subtotal: totals.subtotal,
       vat_total: 0,
       total: totals.total,
