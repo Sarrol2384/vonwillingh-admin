@@ -29,7 +29,7 @@ Optional monthly (not included in this quote total):
 • Essential Care — from R299/mo (hosting support, SSL monitoring, backups where applicable, minor content help)
 • SEO Growth / Advanced SEO — quoted separately if required
 
-Prices exclusive of VAT unless otherwise stated. Final scope confirmed at kickoff / acceptance.
+Prices shown are the full amounts charged. Final scope confirmed at kickoff / acceptance.
 
 Important: the Total on this quote is the once-off website amount. Optional monthly services are billed separately and are not payable as one lump sum with the website deposit.`;
 

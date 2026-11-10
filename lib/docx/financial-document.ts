@@ -13,7 +13,7 @@ import {
   PageNumber,
 } from "docx";
 import { hasBankDetails } from "@/lib/company";
-import { DOCUMENT_TYPE_LABELS } from "@/lib/documents";
+import { customerFacingNotes, DOCUMENT_TYPE_LABELS } from "@/lib/documents";
 import {
   calcDocumentTotals,
   calcLineTotals,
@@ -309,6 +309,9 @@ export function buildFinancialDocumentDocx({
   const title = DOCUMENT_TYPE_LABELS[document.type];
   const showValidity =
     document.type === "quote" && Boolean(document.due_or_valid_until);
+  const showDueDate =
+    document.type === "invoice" && Boolean(document.due_or_valid_until);
+  const notes = customerFacingNotes(document.notes);
   const totals = calcDocumentTotals(
     lines.map((line) => ({
       qty: Number(line.qty),
@@ -321,6 +324,9 @@ export function buildFinancialDocumentDocx({
     `Issue date: ${formatDate(document.issue_date)}`,
     showValidity
       ? `Valid until: ${formatDate(document.due_or_valid_until)}`
+      : null,
+    showDueDate
+      ? `Due date: ${formatDate(document.due_or_valid_until)}`
       : null,
   ].filter(Boolean) as string[];
 
@@ -395,7 +401,7 @@ export function buildFinancialDocumentDocx({
     lineTable(lines, totals),
   ];
 
-  if (document.notes) {
+  if (notes) {
     children.push(
       new Paragraph({
         spacing: { before: 200, after: 80 },
@@ -412,7 +418,7 @@ export function buildFinancialDocumentDocx({
       new Paragraph({
         children: [
           new TextRun({
-            text: document.notes,
+            text: notes,
             size: 18,
             font: FONT,
           }),

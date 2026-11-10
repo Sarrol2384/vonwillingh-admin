@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Standalone CommonJS brief generator, not part of the Next.js app.
+    "client-discovery/**",
   ]),
 ]);
 

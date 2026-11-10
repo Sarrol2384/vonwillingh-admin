@@ -11,7 +11,6 @@ const clientSchema = z.object({
   email: z.string().optional().default(""),
   phone: z.string().optional().default(""),
   address: z.string().optional().default(""),
-  vat_number: z.string().optional().default(""),
   notes: z.string().optional().default(""),
 });
 
@@ -24,7 +23,6 @@ export async function createClient(formData: FormData): Promise<ActionResult> {
     email: formData.get("email") || "",
     phone: formData.get("phone") || "",
     address: formData.get("address") || "",
-    vat_number: formData.get("vat_number") || "",
     notes: formData.get("notes") || "",
   });
   if (!parsed.success) {
@@ -55,7 +53,6 @@ export async function updateClient(
     email: formData.get("email") || "",
     phone: formData.get("phone") || "",
     address: formData.get("address") || "",
-    vat_number: formData.get("vat_number") || "",
     notes: formData.get("notes") || "",
   });
   if (!parsed.success) {
