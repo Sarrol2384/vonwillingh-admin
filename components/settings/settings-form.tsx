@@ -87,19 +87,7 @@ export function SettingsForm({ settings }: { settings: CompanySettings }) {
         <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
           Registration (optional)
         </h2>
-        <p className="text-sm text-muted-foreground">
-          Leave blank if you are not VAT registered.
-        </p>
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="vat_number">VAT number</Label>
-            <Input
-              id="vat_number"
-              name="vat_number"
-              defaultValue={settings.vat_number}
-              placeholder="Not registered"
-            />
-          </div>
           <div className="space-y-2">
             <Label htmlFor="registration_number">CIPC / registration</Label>
             <Input

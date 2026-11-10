@@ -45,7 +45,6 @@ export default async function ClientsPage() {
               <TableHead>Contact</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Phone</TableHead>
-              <TableHead>VAT</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -62,7 +61,6 @@ export default async function ClientsPage() {
                 <TableCell>{client.business_name?.trim() ? client.name : "—"}</TableCell>
                 <TableCell>{client.email || "—"}</TableCell>
                 <TableCell>{client.phone || "—"}</TableCell>
-                <TableCell>{client.vat_number || "—"}</TableCell>
               </TableRow>
             ))}
           </TableBody>

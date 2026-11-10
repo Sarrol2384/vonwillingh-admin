@@ -20,7 +20,7 @@ Domain: fortimpest.co.za remains in Fortim’s name. Transfer/DNS assistance inc
 Payment (website build): 50% deposit on acceptance, 50% prior to go-live.
 Monthly services: billed in advance; cancellable with 30 days’ written notice. No 12-month lock-in unless agreed in writing.
 
-Prices are starting (“from”) amounts ex VAT where marked. Final scope confirmed at kickoff.
+Prices are starting (“from”) amounts. Final scope confirmed at kickoff.
 
 Important: the Total on this quote adds the listed unit prices for reference only. The website is once-off; Care and SEO are billed monthly and are not payable as one lump sum with the website deposit (deposit = 50% of the once-off website amount).
 

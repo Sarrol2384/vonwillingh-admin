@@ -59,7 +59,7 @@ export default async function NewDocumentPage({
           New {DOCUMENT_TYPE_LABELS[type as DocumentType]}
         </h1>
         <p className="text-sm text-muted-foreground">
-          Line amounts are the amounts charged — no VAT added.
+          Line amounts are the full amounts charged.
         </p>
       </div>
       <DocumentEditor

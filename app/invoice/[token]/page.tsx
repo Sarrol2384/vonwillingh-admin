@@ -29,7 +29,7 @@ const PUBLIC_INVOICE_COLUMNS = `
 ` as const;
 
 const PUBLIC_COMPANY_COLUMNS =
-  "company_name, contact_name, registration_number, vat_number, bank_name, bank_account_name, bank_account_number, bank_branch_code" as const;
+  "company_name, contact_name, registration_number, bank_name, bank_account_name, bank_account_number, bank_branch_code" as const;
 
 export default async function PublicInvoicePage({
   params,
