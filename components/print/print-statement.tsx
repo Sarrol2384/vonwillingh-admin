@@ -32,7 +32,6 @@ export function PrintStatement({
             {company.registration_number ? (
               <p>Reg: {company.registration_number}</p>
             ) : null}
-            {company.vat_number ? <p>VAT: {company.vat_number}</p> : null}
           </div>
           <div className="text-right">
             <h1 className="text-2xl font-bold tracking-tight text-[var(--lh-ink,#1a2a4e)]">

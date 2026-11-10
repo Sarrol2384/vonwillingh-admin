@@ -1,5 +1,5 @@
 import { hasBankDetails } from "@/lib/company";
-import { DOCUMENT_TYPE_LABELS } from "@/lib/documents";
+import { customerFacingNotes, DOCUMENT_TYPE_LABELS } from "@/lib/documents";
 import {
   calcDocumentTotals,
   calcLineTotals,
@@ -37,6 +37,7 @@ export function PrintDocument({
     })),
   );
   const title = DOCUMENT_TYPE_LABELS[document.type];
+  const notes = customerFacingNotes(document.notes);
   const showValidity =
     document.type === "quote" && Boolean(document.due_or_valid_until);
 
@@ -55,7 +56,6 @@ export function PrintDocument({
             {company.registration_number ? (
               <p>Reg: {company.registration_number}</p>
             ) : null}
-            {company.vat_number ? <p>VAT: {company.vat_number}</p> : null}
           </div>
           <div className="text-right">
             <h1 className="text-2xl font-bold tracking-tight text-[var(--lh-ink,#1a2a4e)]">
@@ -155,14 +155,12 @@ export function PrintDocument({
           </dl>
         </div>
 
-        {document.notes ? (
+        {notes ? (
           <section className="mt-8">
             <h2 className="text-xs font-semibold tracking-wide text-neutral-500 uppercase">
               Notes
             </h2>
-            <p className="mt-1 whitespace-pre-wrap text-neutral-700">
-              {document.notes}
-            </p>
+            <p className="mt-1 whitespace-pre-wrap text-neutral-700">{notes}</p>
           </section>
         ) : null}
 

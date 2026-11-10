@@ -90,14 +90,6 @@ export function ClientForm({
         />
       </div>
       <div className="space-y-2">
-        <Label htmlFor="vat_number">VAT number</Label>
-        <Input
-          id="vat_number"
-          name="vat_number"
-          defaultValue={client?.vat_number}
-        />
-      </div>
-      <div className="space-y-2">
         <Label htmlFor="notes">Notes</Label>
         <Textarea id="notes" name="notes" rows={3} defaultValue={client?.notes} />
       </div>
