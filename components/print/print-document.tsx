@@ -17,16 +17,43 @@ import type {
   DocumentLine,
 } from "@/lib/supabase/types";
 
+export type PrintableDocument = Pick<
+  Document,
+  "type" | "number" | "issue_date" | "due_or_valid_until" | "notes"
+>;
+
+export type PrintableClient = Pick<
+  Client,
+  "name" | "business_name" | "address" | "email" | "phone"
+>;
+
+export type PrintableLine = Pick<
+  DocumentLine,
+  "id" | "description" | "qty" | "unit_price" | "sort_order" | "done_date"
+>;
+
+export type PrintableCompany = Pick<
+  CompanySettings,
+  | "company_name"
+  | "contact_name"
+  | "registration_number"
+  | "vat_number"
+  | "bank_name"
+  | "bank_account_name"
+  | "bank_account_number"
+  | "bank_branch_code"
+>;
+
 export function PrintDocument({
   document,
   client,
   lines,
   company,
 }: {
-  document: Document;
-  client: Client;
-  lines: DocumentLine[];
-  company: CompanySettings;
+  document: PrintableDocument;
+  client: PrintableClient;
+  lines: PrintableLine[];
+  company: PrintableCompany;
 }) {
   const sorted = [...lines].sort((a, b) => a.sort_order - b.sort_order);
   const totals = calcDocumentTotals(
