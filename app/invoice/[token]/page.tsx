@@ -46,15 +46,30 @@ function paymentNotice(
   return null;
 }
 
+function paySearch(params: Record<string, string | string[] | undefined>): string {
+  const search = new URLSearchParams();
+  for (const name of [
+    "x-vercel-protection-bypass",
+    "x-vercel-set-bypass-cookie",
+  ]) {
+    const value = params[name];
+    const first = Array.isArray(value) ? value[0] : value;
+    if (first) search.set(name, first);
+  }
+  const query = search.toString();
+  return query ? `?${query}` : "";
+}
+
 export default async function PublicInvoicePage({
   params,
   searchParams,
 }: {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ payment?: string | string[] }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { token } = await params;
-  const { payment } = await searchParams;
+  const query = await searchParams;
+  const payment = query.payment;
   if (!token || token.length < 16) notFound();
 
   // Read the service role key on the request, not at build time.
@@ -103,6 +118,7 @@ export default async function PublicInvoicePage({
     <div className="mx-auto min-h-screen max-w-[210mm] bg-neutral-100 p-6 print:max-w-none print:bg-white print:p-0">
       <PublicPayPanel
         token={token}
+        search={paySearch(query)}
         balanceLabel={formatZar(balance)}
         showPay={showPay}
         showDue={balanceKnown && !settled && document.status !== "void"}

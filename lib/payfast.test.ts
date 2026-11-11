@@ -20,6 +20,7 @@ import {
   withPassphrase,
   type PayfastField,
 } from "./payfast";
+import { payNowPostPath } from "./payfast-url";
 
 const DOCUMENTED_FIELDS: PayfastField[] = [
   { name: "merchant_id", value: "10000100" },
@@ -505,6 +506,24 @@ describe("PayFast config", () => {
     assert.match(
       withPassphrase(checkoutParamString(unsigned), DOCUMENTED_PASSPHRASE),
       /notify_url=https%3A%2F%2Fpreview\.vercel\.app%2Fapi%2Fpayfast%2Fitn%3Fx-vercel-protection-bypass%3Dbypass-secret/,
+    );
+  });
+
+  test("keeps the Vercel protection bypass on the Pay now POST", () => {
+    assert.equal(
+      payNowPostPath("abc", ""),
+      "/invoice/abc/pay",
+    );
+    assert.equal(
+      payNowPostPath("a/b", "?payment=cancelled"),
+      "/invoice/a%2Fb/pay",
+    );
+    assert.equal(
+      payNowPostPath(
+        "token",
+        "?payment=cancelled&x-vercel-protection-bypass=bypass%20secret&x-vercel-set-bypass-cookie=true",
+      ),
+      "/invoice/token/pay?x-vercel-protection-bypass=bypass+secret&x-vercel-set-bypass-cookie=true",
     );
   });
 });

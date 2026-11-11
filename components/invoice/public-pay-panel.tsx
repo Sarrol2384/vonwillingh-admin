@@ -1,8 +1,8 @@
-import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { PayNowButton } from "@/components/invoice/pay-now-button";
 
 export function PublicPayPanel({
   token,
+  search,
   balanceLabel,
   showPay,
   showDue,
@@ -10,6 +10,7 @@ export function PublicPayPanel({
   notice,
 }: {
   token: string;
+  search: string;
   balanceLabel: string;
   showPay: boolean;
   showDue: boolean;
@@ -45,16 +46,7 @@ export function PublicPayPanel({
                 : "Use the bank details on this invoice."}
             </p>
           </div>
-          {showPay ? (
-            <form action={`/invoice/${encodeURIComponent(token)}/pay`} method="post">
-              <button
-                type="submit"
-                className={cn(buttonVariants({ size: "lg" }))}
-              >
-                Pay now
-              </button>
-            </form>
-          ) : null}
+          {showPay ? <PayNowButton token={token} search={search} /> : null}
         </div>
       ) : null}
     </div>
