@@ -2,6 +2,7 @@ export const PAYMENT_METHOD_LABELS = {
   eft: "EFT",
   cash: "Cash",
   card: "Card",
+  payfast: "PayFast",
   other: "Other",
 } as const;
 
@@ -151,4 +152,12 @@ export function remainingByInvoice(
     );
   }
   return remaining;
+}
+
+/** Outstanding on one invoice. Void invoices are treated as nothing due. */
+export function invoiceBalance(
+  invoice: { id: string; total: number | string; status: string },
+  payments: Array<{ amount: number | string; document_id: string | null }>,
+): number {
+  return remainingByInvoice([invoice], payments).get(invoice.id) ?? 0;
 }
