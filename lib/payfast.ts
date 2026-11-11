@@ -67,6 +67,19 @@ export function isPayfastConfigured(
   return readPayfastConfig(env) !== null;
 }
 
+/**
+ * notify_url sent to PayFast. PAYFAST_NOTIFY_URL, when set, is used as-is
+ * (including a Vercel protection-bypass query) and is part of the signature.
+ */
+export function payfastNotifyUrl(
+  base: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const override = env.PAYFAST_NOTIFY_URL?.trim() ?? "";
+  if (override) return override;
+  return `${base.replace(/\/$/, "")}/api/payfast/itn`;
+}
+
 export function payfastProcessUrl(mode: PayfastMode): string {
   const host = mode === "live" ? "www.payfast.co.za" : "sandbox.payfast.co.za";
   return `https://${host}/eng/process`;

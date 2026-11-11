@@ -4,6 +4,7 @@ import { formatZar } from "@/lib/money";
 import {
   buildPayfastCheckout,
   invoiceCanBePaidOnline,
+  payfastNotifyUrl,
   readPayfastConfig,
   splitPersonName,
 } from "@/lib/payfast";
@@ -101,7 +102,7 @@ export async function POST(
     mode: config.mode,
     returnUrl: `${base}/invoice/${encodeURIComponent(token)}?payment=received`,
     cancelUrl: `${base}/invoice/${encodeURIComponent(token)}?payment=cancelled`,
-    notifyUrl: `${base}/api/payfast/itn`,
+    notifyUrl: payfastNotifyUrl(base),
     documentId: document.id,
     amount: balance,
     itemName: document.number,

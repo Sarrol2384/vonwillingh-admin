@@ -37,6 +37,8 @@ export async function POST(request: Request) {
   const config = readPayfastConfig();
   if (!config) return text("PayFast is not configured", 500);
 
+  // The notify URL may include a query string, such as Vercel's
+  // protection bypass. Validation uses the posted fields only.
   let formData: FormData;
   try {
     formData = await request.formData();

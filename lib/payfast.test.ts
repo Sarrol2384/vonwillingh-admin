@@ -5,6 +5,7 @@ import {
   checkoutParamString,
   confirmItnWithPayfast,
   evaluatePayfastItn,
+  fieldsFromFormData,
   generatePayfastSignature,
   invoiceCanBePaidOnline,
   isPayfastSourceIp,
@@ -13,6 +14,7 @@ import {
   md5Hex,
   payfastAmountMatches,
   payfastCandidateIps,
+  payfastNotifyUrl,
   payfastUrlEncode,
   readPayfastConfig,
   withPassphrase,
@@ -66,6 +68,7 @@ const savedEnv = {
   PAYFAST_MERCHANT_KEY: process.env.PAYFAST_MERCHANT_KEY,
   PAYFAST_PASSPHRASE: process.env.PAYFAST_PASSPHRASE,
   PAYFAST_MODE: process.env.PAYFAST_MODE,
+  PAYFAST_NOTIFY_URL: process.env.PAYFAST_NOTIFY_URL,
 };
 
 afterEach(() => {
@@ -403,6 +406,31 @@ describe("PayFast ITN validation", () => {
     assert.equal(invalid, false);
   });
 
+  test("reads the posted body and ignores a protection-bypass query string", async () => {
+    const request = new Request(
+      "https://preview.vercel.app/api/payfast/itn?x-vercel-protection-bypass=bypass-secret&amount_gross=1.00",
+      {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: "m_payment_id=11111111-1111-4111-8111-111111111111&payment_status=COMPLETE&amount_gross=200.00",
+      },
+    );
+
+    const fields = fieldsFromFormData(await request.formData());
+    assert.deepEqual(
+      fields.map((field) => field.name),
+      ["m_payment_id", "payment_status", "amount_gross"],
+    );
+    assert.equal(
+      fields.find((field) => field.name === "amount_gross")?.value,
+      "200.00",
+    );
+    assert.equal(
+      new URL(request.url).searchParams.get("x-vercel-protection-bypass"),
+      "bypass-secret",
+    );
+  });
+
   test("reads the caller address from the proxy headers", () => {
     assert.deepEqual(
       payfastCandidateIps({
@@ -436,5 +464,47 @@ describe("PayFast config", () => {
 
     process.env.PAYFAST_MODE = "nope";
     assert.equal(readPayfastConfig()?.mode, "sandbox");
+  });
+
+  test("uses PAYFAST_NOTIFY_URL verbatim, including the protection bypass", () => {
+    delete process.env.PAYFAST_NOTIFY_URL;
+    assert.equal(
+      payfastNotifyUrl("https://vonwillingh-admin.vercel.app"),
+      "https://vonwillingh-admin.vercel.app/api/payfast/itn",
+    );
+    assert.equal(
+      payfastNotifyUrl("https://vonwillingh-admin.vercel.app/"),
+      "https://vonwillingh-admin.vercel.app/api/payfast/itn",
+    );
+    process.env.PAYFAST_NOTIFY_URL = "   ";
+    assert.equal(
+      payfastNotifyUrl("https://vonwillingh-admin.vercel.app"),
+      "https://vonwillingh-admin.vercel.app/api/payfast/itn",
+    );
+
+    const notifyUrl =
+      "https://preview.vercel.app/api/payfast/itn?x-vercel-protection-bypass=bypass-secret";
+    process.env.PAYFAST_NOTIFY_URL = `  ${notifyUrl}  `;
+    assert.equal(payfastNotifyUrl("https://vonwillingh-admin.vercel.app"), notifyUrl);
+
+    const checkout = buildPayfastCheckout({
+      merchantId: "10000100",
+      merchantKey: "46f0cd694581a",
+      passphrase: DOCUMENTED_PASSPHRASE,
+      mode: "sandbox",
+      returnUrl: "https://preview.vercel.app/invoice/token?payment=received",
+      cancelUrl: "https://preview.vercel.app/invoice/token?payment=cancelled",
+      notifyUrl: payfastNotifyUrl("https://vonwillingh-admin.vercel.app"),
+      documentId: DOCUMENT_ID,
+      amount: 10,
+      itemName: "INV-100",
+    });
+    const notifyField = checkout.fields.find((field) => field.name === "notify_url");
+    assert.equal(notifyField?.value, notifyUrl);
+    const unsigned = checkout.fields.filter((field) => field.name !== "signature");
+    assert.match(
+      withPassphrase(checkoutParamString(unsigned), DOCUMENTED_PASSPHRASE),
+      /notify_url=https%3A%2F%2Fpreview\.vercel\.app%2Fapi%2Fpayfast%2Fitn%3Fx-vercel-protection-bypass%3Dbypass-secret/,
+    );
   });
 });

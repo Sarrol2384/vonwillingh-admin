@@ -101,6 +101,7 @@ Set these on the server (Vercel and `.env.local`). Do not prefix them with `NEXT
 | `PAYFAST_MERCHANT_KEY` | Merchant key from the PayFast dashboard |
 | `PAYFAST_PASSPHRASE` | Salt passphrase. Leave empty only if the PayFast account has none |
 | `PAYFAST_MODE` | `sandbox` or `live`. Defaults to `sandbox` |
+| `PAYFAST_NOTIFY_URL` | Optional. Full `notify_url` used as-is, including a query string. Leave empty to use `${NEXT_PUBLIC_APP_URL}/api/payfast/itn` |
 | `NEXT_PUBLIC_APP_URL` | Public site URL with no trailing slash, used for the return, cancel, and notify links |
 | `SUPABASE_SERVICE_ROLE_KEY` | Already required. The webhook records the payment with this key |
 
@@ -108,7 +109,13 @@ Production ITN URL:
 
 `https://vonwillingh-admin.vercel.app/api/payfast/itn`
 
-That path is public. PayFast must be able to POST to it. Each checkout also sends this URL as `notify_url`.
+That path is public. PayFast must be able to POST to it. Each checkout sends it as `notify_url`, unless `PAYFAST_NOTIFY_URL` is set.
+
+`PAYFAST_NOTIFY_URL` is optional and server-only. When it is set, that exact value is the `notify_url` and is included in the signature. Use it for a Vercel preview behind Deployment Protection:
+
+`https://<preview>.vercel.app/api/payfast/itn?x-vercel-protection-bypass=<secret>`
+
+The ITN handler reads the POST body only, so the extra query parameter does not change validation. Leave this variable empty on production.
 
 ### Sandbox test
 
