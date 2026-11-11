@@ -11,7 +11,7 @@ export type DocumentStatus =
   | "issued"
   | "void";
 
-export type PaymentMethod = "eft" | "cash" | "card" | "other";
+export type PaymentMethod = "eft" | "cash" | "card" | "payfast" | "other";
 export type ContractStatus = "draft" | "active" | "paused" | "ended";
 export type BillingCadence = "monthly" | "quarterly" | "yearly";
 
@@ -291,6 +291,7 @@ export type Database = {
           method: PaymentMethod;
           reference: string;
           notes: string;
+          pf_payment_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -302,6 +303,7 @@ export type Database = {
           method?: PaymentMethod;
           reference?: string;
           notes?: string;
+          pf_payment_id?: string | null;
           created_at?: string;
         };
         Update: {
@@ -313,6 +315,7 @@ export type Database = {
           method?: PaymentMethod;
           reference?: string;
           notes?: string;
+          pf_payment_id?: string | null;
           created_at?: string;
         };
         Relationships: [

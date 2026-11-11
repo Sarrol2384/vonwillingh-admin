@@ -17,6 +17,7 @@ export async function updateSession(request: NextRequest) {
     pathname === "/" ||
     pathname.startsWith("/invoice/") ||
     pathname.startsWith("/api/billing/") ||
+    pathname.startsWith("/api/payfast/") ||
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico";
 

@@ -27,10 +27,11 @@ Invoices, quotes, credit notes, recurring contracts, payments, and Brevo invoice
    - [`supabase/migrations/004_seed_catalog_from_website.sql`](supabase/migrations/004_seed_catalog_from_website.sql) optional catalog seed
    - [`supabase/migrations/005_payments_contracts.sql`](supabase/migrations/005_payments_contracts.sql) **payments, contracts, invoice email log**
    - [`supabase/migrations/006_public_invoice_anon_lockdown.sql`](supabase/migrations/006_public_invoice_anon_lockdown.sql) **stop the anon key reading invoices, clients, and bank details**
+   - [`supabase/migrations/007_payfast_payments.sql`](supabase/migrations/007_payfast_payments.sql) **PayFast payment id and method**
 
    `003_client_documents.sql` and `003_line_done_date_and_catalog.sql` share a number but are different scripts. Run both on a new database, in that order. Do not renumber or re-run them on a database that already has them.
 
-   On a database that already has agreements and payments, the only new script is `006_public_invoice_anon_lockdown.sql`. Run it once, after this app version is deployed and `SUPABASE_SERVICE_ROLE_KEY` is set on the server. Steps are in [Public invoice links](#public-invoice-links). It does not change `client_documents`.
+   On a database that already has agreements, payments, and the anon lockdown, run [`supabase/migrations/007_payfast_payments.sql`](supabase/migrations/007_payfast_payments.sql) once before clients pay online. Steps are in [PayFast](#payfast). It does not grant the anon key any access.
 
 5. Create an Auth user in Supabase (Authentication → Users) if you have not already.
 
@@ -48,7 +49,8 @@ Invoices, quotes, credit notes, recurring contracts, payments, and Brevo invoice
 - Catalog items (reusable names + prices)
 - Quotes, invoices, credit notes (ZAR; no VAT charged), including Word download
 - Service agreements and discovery briefs (`client_documents`), including Word download
-- **Payments ledger** — record EFT/cash/card payments; allocate to invoices; auto-mark paid when balance is covered
+- **Payments ledger** — record EFT/cash/card/PayFast payments; allocate to invoices; auto-mark paid when balance is covered
+- **PayFast** — Pay now on a public invoice link, for the amount still due
 - **Recurring contracts** — monthly / quarterly / yearly; generate invoices on schedule
 - **Brevo email** — send invoices to clients; contracts with auto-send email when billed
 - Public invoice link for clients (`/invoice/[token]`) — one invoice per token, loaded on the server
@@ -61,7 +63,7 @@ Invoices, quotes, credit notes, recurring contracts, payments, and Brevo invoice
 1. Create a **contract** for a client (status **Active**, set **Next bill on**, enable **Auto-email**).
 2. Use **Run billing now** (Dashboard / Contracts) or wait for the daily cron.
 3. Active contracts due on or before today get a new invoice; if auto-send is on and the client has an email, Brevo sends it.
-4. When money arrives, **Record payment** and allocate it to the invoice.
+4. When money arrives, **Record payment** and allocate it to the invoice. A PayFast payment is recorded the same way once PayFast confirms it.
 
 ## Brevo setup
 
@@ -84,6 +86,48 @@ Invoices, quotes, credit notes, recurring contracts, payments, and Brevo invoice
   ```bash
   curl -H "Authorization: Bearer YOUR_CRON_SECRET" https://your-app.vercel.app/api/billing/run
   ```
+
+## PayFast
+
+Clients with an outstanding invoice (not a quote or credit note) see **Pay now** on `/invoice/[token]`. The button is hidden when `PAYFAST_MERCHANT_ID` or `PAYFAST_MERCHANT_KEY` is missing. The amount is the balance on the server. PayFast sends the result to the ITN webhook, which records a payment and marks the invoice paid when the balance is covered, the same way a payment entered by hand does.
+
+Apply [`supabase/migrations/007_payfast_payments.sql`](supabase/migrations/007_payfast_payments.sql) once per Supabase project before relying on this. It adds a PayFast method and a unique PayFast transaction id so a repeated notification does not record the payment twice. It does not give the anon key access to payments or invoices.
+
+Set these on the server (Vercel and `.env.local`). Do not prefix them with `NEXT_PUBLIC_` and do not commit real values.
+
+| Variable | Purpose |
+| --- | --- |
+| `PAYFAST_MERCHANT_ID` | Merchant id from the PayFast dashboard |
+| `PAYFAST_MERCHANT_KEY` | Merchant key from the PayFast dashboard |
+| `PAYFAST_PASSPHRASE` | Salt passphrase. Leave empty only if the PayFast account has none |
+| `PAYFAST_MODE` | `sandbox` or `live`. Defaults to `sandbox` |
+| `PAYFAST_NOTIFY_URL` | Optional. Full `notify_url` used as-is, including a query string. Leave empty to use `${NEXT_PUBLIC_APP_URL}/api/payfast/itn` |
+| `NEXT_PUBLIC_APP_URL` | Public site URL with no trailing slash, used for the return, cancel, and notify links |
+| `SUPABASE_SERVICE_ROLE_KEY` | Already required. The webhook records the payment with this key |
+
+Production ITN URL:
+
+`https://vonwillingh-admin.vercel.app/api/payfast/itn`
+
+That path is public. PayFast must be able to POST to it. Each checkout sends it as `notify_url`, unless `PAYFAST_NOTIFY_URL` is set.
+
+`PAYFAST_NOTIFY_URL` is optional and server-only. When it is set, that exact value is the `notify_url` and is included in the signature. Use it for a Vercel preview behind Deployment Protection:
+
+`https://<preview>.vercel.app/api/payfast/itn?x-vercel-protection-bypass=<secret>`
+
+The ITN handler reads the POST body only, so the extra query parameter does not change validation. Leave this variable empty on production.
+
+### Sandbox test
+
+1. Apply migration 007.
+2. In `.env.local`, set `PAYFAST_MODE=sandbox` and PayFast's public test merchant (local testing only): merchant id `10000100`, merchant key `46f0cd694581a`, passphrase `jt7NOE43FZPn`.
+3. Set `NEXT_PUBLIC_APP_URL` to a public https URL. PayFast cannot call `localhost`. For a local app, use a tunnel and put that URL here. On Vercel, use `https://vonwillingh-admin.vercel.app`.
+4. Open a public invoice that still has a balance and choose **Pay now**.
+5. Sign in to the sandbox buyer (`sbtu01@payfast.io` / `clientpass`) and pay with the PayFast wallet.
+6. Cancel returns to the invoice with “Payment cancelled.” A finished payment returns with “Thanks, payment received.”
+7. After the ITN arrives, the same invoice shows as paid, and the payment appears under Payments with method PayFast and the PayFast transaction id as the reference.
+
+Switch `PAYFAST_MODE` to `live` and replace the merchant id, key, and passphrase with the live account when you are ready to take real payments. Do not use the public test merchant on the live site.
 
 ## Public invoice links
 

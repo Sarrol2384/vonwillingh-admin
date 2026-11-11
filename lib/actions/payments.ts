@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
+import { syncInvoicePaidStatus } from "@/lib/invoice-payment-status";
 import { roundMoney } from "@/lib/payments";
 import { todayIsoDate } from "@/lib/money";
 
@@ -14,55 +15,10 @@ const paymentSchema = z.object({
   document_id: z.string().uuid("Select an invoice to allocate this payment"),
   amount: z.coerce.number().positive("Amount must be greater than 0"),
   paid_at: z.string().min(1),
-  method: z.enum(["eft", "cash", "card", "other"]),
+  method: z.enum(["eft", "cash", "card", "payfast", "other"]),
   reference: z.string().optional().default(""),
   notes: z.string().optional().default(""),
 });
-
-async function syncInvoicePaidStatus(
-  supabase: Awaited<ReturnType<typeof requireUser>>["supabase"],
-  documentId: string,
-) {
-  const { data: invoice } = await supabase
-    .from("documents")
-    .select("id, total, status, type")
-    .eq("id", documentId)
-    .eq("type", "invoice")
-    .maybeSingle();
-
-  if (!invoice || invoice.status === "void") return;
-
-  const { data: payments } = await supabase
-    .from("payments")
-    .select("amount")
-    .eq("document_id", documentId);
-
-  const paidTotal = roundMoney(
-    (payments ?? []).reduce((sum, row) => sum + Number(row.amount), 0),
-  );
-  const invoiceTotal = roundMoney(Number(invoice.total));
-
-  if (paidTotal >= invoiceTotal && invoice.status !== "paid") {
-    await supabase
-      .from("documents")
-      .update({ status: "paid", updated_at: new Date().toISOString() })
-      .eq("id", documentId);
-  } else if (
-    paidTotal < invoiceTotal &&
-    invoice.status === "paid" &&
-    paidTotal > 0
-  ) {
-    await supabase
-      .from("documents")
-      .update({ status: "sent", updated_at: new Date().toISOString() })
-      .eq("id", documentId);
-  } else if (paidTotal === 0 && invoice.status === "paid") {
-    await supabase
-      .from("documents")
-      .update({ status: "sent", updated_at: new Date().toISOString() })
-      .eq("id", documentId);
-  }
-}
 
 export async function createPayment(formData: FormData): Promise<ActionResult> {
   const parsed = paymentSchema.safeParse({
