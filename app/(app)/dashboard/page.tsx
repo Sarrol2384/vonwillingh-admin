@@ -139,9 +139,11 @@ export default async function DashboardPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Client</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead className="whitespace-normal">Date</TableHead>
+                    <TableHead className="whitespace-normal">Client</TableHead>
+                    <TableHead className="text-right whitespace-normal">
+                      Amount
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -154,9 +156,13 @@ export default async function DashboardPage() {
                       client?.business_name?.trim() || client?.name || "—";
                     return (
                       <TableRow key={payment.id}>
-                        <TableCell>{formatDate(payment.paid_at)}</TableCell>
-                        <TableCell>{label}</TableCell>
-                        <TableCell className="text-right tabular-nums">
+                        <TableCell className="whitespace-normal">
+                          {formatDate(payment.paid_at)}
+                        </TableCell>
+                        <TableCell className="whitespace-normal">
+                          {label}
+                        </TableCell>
+                        <TableCell className="text-right whitespace-normal tabular-nums">
                           {formatZar(Number(payment.amount))}
                         </TableCell>
                       </TableRow>

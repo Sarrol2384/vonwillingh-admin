@@ -10,12 +10,19 @@ export default async function AppLayout({
   await requireUser();
 
   return (
-    <div className="flex min-h-screen">
-      <Suspense fallback={<aside className="w-56 border-r" />}>
+    <div className="flex min-h-screen w-full min-w-0 flex-col md:flex-row">
+      <Suspense
+        fallback={
+          <>
+            <div className="h-14 border-b border-sidebar-border bg-sidebar md:hidden" />
+            <aside className="hidden w-56 shrink-0 border-r bg-sidebar md:block" />
+          </>
+        }
+      >
         <AppNav />
       </Suspense>
-      <main className="flex-1 overflow-auto">
-        <div className="mx-auto max-w-6xl p-6">{children}</div>
+      <main className="min-w-0 flex-1">
+        <div className="mx-auto min-w-0 max-w-6xl p-4 md:p-6">{children}</div>
       </main>
     </div>
   );
