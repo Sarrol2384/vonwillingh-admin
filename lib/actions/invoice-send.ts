@@ -8,10 +8,23 @@ import {
   publicInvoiceUrl,
 } from "@/lib/email/invoice-email";
 import { newPublicToken } from "@/lib/billing";
+import {
+  parseRecipientEmails,
+  sameRecipients,
+} from "@/lib/email/recipients";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
 
-export type ActionResult = { ok: true; id?: string } | { ok: false; error: string };
+export type ActionResult =
+  | {
+      ok: true;
+      id?: string;
+      number?: string;
+      total?: number;
+      recipients?: string[];
+      sentAt?: string;
+    }
+  | { ok: false; error: string };
 
 type DbClient = SupabaseClient<Database>;
 
@@ -33,6 +46,7 @@ export async function ensurePublicToken(
 export async function sendInvoiceEmailInternal(
   supabase: DbClient,
   documentId: string,
+  options?: { confirmedRecipients?: string[] },
 ): Promise<ActionResult> {
   const { data: document, error } = await supabase
     .from("documents")
@@ -51,8 +65,18 @@ export async function sendInvoiceEmailInternal(
 
   const client = document.clients;
   if (!client) return { ok: false, error: "Client not found" };
-  if (!client.email?.trim()) {
+  const recipients = parseRecipientEmails(client.email);
+  if (!recipients.length) {
     return { ok: false, error: "Client has no email address" };
+  }
+  if (
+    options?.confirmedRecipients &&
+    !sameRecipients(recipients, options.confirmedRecipients)
+  ) {
+    return {
+      ok: false,
+      error: "The recipient changed. Review the address and try again.",
+    };
   }
 
   const { data: settings } = await supabase
@@ -86,8 +110,12 @@ export async function sendInvoiceEmailInternal(
 
   const result = await sendBrevoEmail(
     {
-      toEmail: client.email.trim(),
-      toName: client.business_name?.trim() || client.name,
+      toEmail: recipients[0],
+      toEmails: recipients,
+      toName:
+        recipients.length === 1
+          ? client.business_name?.trim() || client.name
+          : undefined,
       subject: email.subject,
       htmlContent: email.htmlContent,
       textContent: email.textContent,
@@ -99,14 +127,18 @@ export async function sendInvoiceEmailInternal(
     { email: settings.email, name: settings.company_name },
   );
 
-  await supabase.from("invoice_sends").insert({
-    document_id: document.id,
-    client_id: client.id,
-    to_email: client.email.trim(),
-    status: result.ok ? "sent" : "failed",
-    provider_message_id: result.ok ? result.messageId : "",
-    error: result.ok ? "" : result.error,
-  });
+  const { data: logged } = await supabase
+    .from("invoice_sends")
+    .insert({
+      document_id: document.id,
+      client_id: client.id,
+      to_email: recipients.join(", "),
+      status: result.ok ? "sent" : "failed",
+      provider_message_id: result.ok ? result.messageId : "",
+      error: result.ok ? "" : result.error,
+    })
+    .select("sent_at")
+    .maybeSingle();
 
   if (!result.ok) {
     return { ok: false, error: result.error };
@@ -119,16 +151,26 @@ export async function sendInvoiceEmailInternal(
       .eq("id", document.id);
   }
 
-  return { ok: true, id: document.id };
+  return {
+    ok: true,
+    id: document.id,
+    number: document.number,
+    total: Number(document.total),
+    recipients,
+    sentAt: logged?.sent_at ?? new Date().toISOString(),
+  };
 }
 
-export async function sendInvoiceEmail(documentId: string): Promise<ActionResult> {
+export async function sendInvoiceEmail(
+  documentId: string,
+  confirmedRecipients: string[],
+): Promise<ActionResult> {
   const { supabase } = await requireUser();
-  const result = await sendInvoiceEmailInternal(supabase, documentId);
-  if (result.ok) {
-    revalidatePath("/documents");
-    revalidatePath(`/documents/${documentId}`);
-    revalidatePath("/dashboard");
-  }
+  const result = await sendInvoiceEmailInternal(supabase, documentId, {
+    confirmedRecipients,
+  });
+  revalidatePath("/documents");
+  revalidatePath(`/documents/${documentId}`);
+  revalidatePath("/dashboard");
   return result;
 }

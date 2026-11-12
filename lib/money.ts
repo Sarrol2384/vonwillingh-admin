@@ -10,13 +10,28 @@ export function formatZar(amount: number | null | undefined): string {
   }).format(amount);
 }
 
+function parseDisplayDate(date: string): Date {
+  return new Date(date.includes("T") ? date : `${date}T12:00:00`);
+}
+
 export function formatDate(date: string | null | undefined): string {
   if (!date) return "";
   return new Intl.DateTimeFormat("en-ZA", {
     day: "numeric",
     month: "long",
     year: "numeric",
-  }).format(new Date(date.includes("T") ? date : `${date}T12:00:00`));
+  }).format(parseDisplayDate(date));
+}
+
+export function formatDateTime(date: string | null | undefined): string {
+  if (!date) return "";
+  return new Intl.DateTimeFormat("en-ZA", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(parseDisplayDate(date));
 }
 
 export function todayIsoDate(): string {
