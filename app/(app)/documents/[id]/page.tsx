@@ -2,10 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { DOCUMENT_TYPE_LABELS } from "@/lib/documents";
+import { parseRecipientEmails } from "@/lib/email/recipients";
 import { formatDate, formatZar } from "@/lib/money";
 import { PAYMENT_METHOD_LABELS, roundMoney } from "@/lib/payments";
 import { DocumentEditor } from "@/components/documents/document-editor";
 import { DocumentActions } from "@/components/documents/document-actions";
+import { InvoiceEmailHistory } from "@/components/documents/invoice-email-history";
 import {
   DocumentStatusBadge,
   DocumentTypeBadge,
@@ -35,7 +37,7 @@ export default async function DocumentDetailPage({
   ] = await Promise.all([
     supabase
       .from("documents")
-      .select("*, document_lines(*)")
+      .select("*, document_lines(*), clients(email)")
       .eq("id", id)
       .maybeSingle(),
     supabase.from("clients").select("*").order("name"),
@@ -54,12 +56,19 @@ export default async function DocumentDetailPage({
       .from("invoice_sends")
       .select("*")
       .eq("document_id", id)
-      .order("sent_at", { ascending: false })
-      .limit(5),
+      .order("sent_at", { ascending: false }),
   ]);
 
   if (!document) notFound();
 
+  const joinedClient = document.clients as
+    | { email: string }
+    | { email: string }[]
+    | null;
+  const clientEmail = Array.isArray(joinedClient)
+    ? joinedClient[0]?.email
+    : joinedClient?.email;
+  const recipientEmails = parseRecipientEmails(clientEmail);
   const lines = document.document_lines ?? [];
   const paidTotal = roundMoney(
     (payments ?? []).reduce((sum, row) => sum + Number(row.amount), 0),
@@ -81,7 +90,10 @@ export default async function DocumentDetailPage({
             Edit {DOCUMENT_TYPE_LABELS[document.type].toLowerCase()} details
           </p>
         </div>
-        <DocumentActions document={document} />
+        <DocumentActions
+          document={document}
+          recipientEmails={recipientEmails}
+        />
       </div>
 
       {document.type === "invoice" ? (
@@ -113,8 +125,14 @@ export default async function DocumentDetailPage({
         </div>
       ) : null}
 
-      {document.type === "invoice" && (payments?.length || sends?.length) ? (
-        <div className="grid gap-4 lg:grid-cols-2">
+      {document.type === "invoice" ? (
+        <div
+          className={
+            payments?.length
+              ? "grid gap-4 lg:grid-cols-2"
+              : "grid gap-4"
+          }
+        >
           {payments?.length ? (
             <Card>
               <CardHeader>
@@ -146,36 +164,12 @@ export default async function DocumentDetailPage({
               </CardContent>
             </Card>
           ) : null}
-          {sends?.length ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Email history</CardTitle>
-                <CardDescription>Brevo sends for this invoice</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                {sends.map((send) => (
-                  <div key={send.id}>
-                    {formatDate(send.sent_at)} · {send.to_email} ·{" "}
-                    <span
-                      className={
-                        send.status === "sent"
-                          ? "text-foreground"
-                          : "text-destructive"
-                      }
-                    >
-                      {send.status}
-                    </span>
-                    {send.error ? (
-                      <span className="text-muted-foreground">
-                        {" "}
-                        — {send.error}
-                      </span>
-                    ) : null}
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          ) : null}
+          <InvoiceEmailHistory
+            documentId={document.id}
+            number={document.number}
+            total={Number(document.total)}
+            sends={sends ?? []}
+          />
         </div>
       ) : null}
 
