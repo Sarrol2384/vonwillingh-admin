@@ -7,11 +7,28 @@ export type BrevoSendResult =
 export type BrevoEmailPayload = {
   toEmail: string;
   toName?: string;
+  /** Every address this message is delivered to. Falls back to `toEmail`. */
+  toEmails?: string[];
   subject: string;
   htmlContent: string;
   textContent: string;
   replyTo?: { email: string; name?: string };
 };
+
+function deliveryAddresses(payload: BrevoEmailPayload): string[] {
+  const source = payload.toEmails?.length ? payload.toEmails : [payload.toEmail];
+  const seen = new Set<string>();
+  const emails: string[] = [];
+  for (const raw of source) {
+    const email = raw.trim();
+    if (!email) continue;
+    const key = email.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    emails.push(email);
+  }
+  return emails;
+}
 
 function senderFromEnv(): { email: string; name: string } | null {
   const email = process.env.BREVO_SENDER_EMAIL?.trim();
@@ -43,14 +60,17 @@ export async function sendBrevoEmail(
     };
   }
 
+  const emails = deliveryAddresses(payload);
+  if (!emails.length) {
+    return { ok: false, error: "No recipient email address" };
+  }
+
   const body = {
     sender: { email: sender.email, name: sender.name },
-    to: [
-      {
-        email: payload.toEmail,
-        ...(payload.toName ? { name: payload.toName } : {}),
-      },
-    ],
+    to: emails.map((email, index) => ({
+      email,
+      ...(index === 0 && payload.toName ? { name: payload.toName } : {}),
+    })),
     subject: payload.subject,
     htmlContent: payload.htmlContent,
     textContent: payload.textContent,

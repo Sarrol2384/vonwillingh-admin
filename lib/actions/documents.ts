@@ -413,6 +413,99 @@ export async function convertQuoteToInvoice(quoteId: string): Promise<ActionResu
   redirect(`/documents/${invoice.id}`);
 }
 
+export async function createCreditNoteFromInvoice(
+  invoiceId: string,
+): Promise<ActionResult> {
+  const { supabase } = await requireUser();
+
+  const { data: invoice, error } = await supabase
+    .from("documents")
+    .select("*, document_lines(*)")
+    .eq("id", invoiceId)
+    .eq("type", "invoice")
+    .single();
+
+  if (error || !invoice) {
+    return { ok: false, error: error?.message ?? "Invoice not found" };
+  }
+
+  const { data: number, error: numError } = await supabase.rpc(
+    "next_document_number",
+    { p_type: "credit_note" as DocumentType },
+  );
+  if (numError || !number) {
+    return {
+      ok: false,
+      error: numError?.message ?? "Could not allocate credit note number",
+    };
+  }
+
+  const lines = [...(invoice.document_lines ?? [])].sort(
+    (a, b) => a.sort_order - b.sort_order,
+  );
+  if (!lines.length) {
+    return { ok: false, error: "Invoice has no lines to credit" };
+  }
+
+  const totals = calcDocumentTotals(
+    lines.map((line) => ({
+      qty: Number(line.qty),
+      unit_price: Number(line.unit_price),
+      vat_rate: 0,
+    })),
+  );
+
+  const { data: creditNote, error: creditError } = await supabase
+    .from("documents")
+    .insert({
+      type: "credit_note",
+      number,
+      status: "draft",
+      client_id: invoice.client_id,
+      issue_date: todayIsoDate(),
+      due_or_valid_until: null,
+      notes: customerFacingNotes(
+        [`Credit for invoice ${invoice.number}.`, customerFacingNotes(invoice.notes)]
+          .filter((part) => part.trim().length > 0)
+          .join("\n"),
+      ),
+      subtotal: totals.subtotal,
+      vat_total: 0,
+      total: totals.total,
+      source_quote_id: null,
+    })
+    .select("id")
+    .single();
+
+  if (creditError || !creditNote) {
+    return {
+      ok: false,
+      error: creditError?.message ?? "Could not create credit note",
+    };
+  }
+
+  const { error: linesError } = await supabase.from("document_lines").insert(
+    lines.map((line, index) => ({
+      document_id: creditNote.id,
+      description: line.description,
+      qty: line.qty,
+      unit_price: line.unit_price,
+      vat_rate: 0,
+      sort_order: line.sort_order ?? index,
+      done_date: line.done_date ?? null,
+    })),
+  );
+  if (linesError) {
+    await supabase.from("documents").delete().eq("id", creditNote.id);
+    return { ok: false, error: linesError.message };
+  }
+
+  revalidatePath("/documents");
+  revalidatePath(`/documents/${invoiceId}`);
+  revalidatePath("/dashboard");
+  redirect(`/documents/${creditNote.id}`);
+}
+
 export async function deleteDocument(id: string): Promise<ActionResult> {
   const { supabase } = await requireUser();
   const { error } = await supabase.from("documents").delete().eq("id", id);

@@ -15,7 +15,13 @@ import {
 import type { Document, DocumentStatus, DocumentType } from "@/lib/supabase/types";
 import { statusesForType } from "@/lib/documents";
 
-export function DocumentActions({ document }: { document: Document }) {
+export function DocumentActions({
+  document,
+  recipientEmails = [],
+}: {
+  document: Document;
+  recipientEmails?: string[];
+}) {
   const [pending, startTransition] = useTransition();
   const statuses = statusesForType(document.type as DocumentType);
 
@@ -62,7 +68,13 @@ export function DocumentActions({ document }: { document: Document }) {
         Print / PDF
       </LinkButton>
       {document.type === "invoice" && document.status !== "void" ? (
-        <SendInvoiceButton documentId={document.id} />
+        <SendInvoiceButton
+          documentId={document.id}
+          clientId={document.client_id}
+          number={document.number}
+          total={Number(document.total)}
+          recipients={recipientEmails}
+        />
       ) : null}
       {document.type === "invoice" && document.status !== "void" ? (
         <LinkButton
