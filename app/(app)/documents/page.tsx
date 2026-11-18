@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
+import { SendWhatsAppButton } from "@/components/documents/send-whatsapp-button";
 import {
   documentTypeFromParam,
   DOCUMENT_TYPE_LABELS,
 } from "@/lib/documents";
 import { formatDate, formatZar } from "@/lib/money";
+import { invoiceBalance } from "@/lib/payments";
+import { publicInvoiceUrl } from "@/lib/public-url";
+import { invoiceWhatsAppButtonState } from "@/lib/whatsapp";
 import { LinkButton } from "@/components/ui/link-button";
 import {
   Table,
@@ -30,14 +34,23 @@ export default async function DocumentsPage({
 
   let query = supabase
     .from("documents")
-    .select("*, clients(name, business_name)")
+    .select("*, clients(name, business_name, phone)")
     .order("issue_date", { ascending: false });
 
   if (type) {
     query = query.eq("type", type);
   }
 
-  const { data: documents } = await query;
+  const [{ data: documents }, { data: settings }, { data: paymentRows }] =
+    await Promise.all([
+      query,
+      supabase
+        .from("company_settings")
+        .select("company_name, contact_name")
+        .limit(1)
+        .maybeSingle(),
+      supabase.from("payments").select("amount, document_id"),
+    ]);
 
   const title = type ? DOCUMENT_TYPE_LABELS[type] + "s" : "Documents";
   const newHref = type
@@ -85,18 +98,49 @@ export default async function DocumentsPage({
               const client = doc.clients as {
                 name: string;
                 business_name: string;
+                phone?: string;
               } | null;
               const clientLabel =
                 client?.business_name?.trim() || client?.name || "—";
+              const whatsapp =
+                doc.type === "invoice" && doc.status !== "void"
+                  ? invoiceWhatsAppButtonState({
+                      clientName: client?.name,
+                      businessName: client?.business_name,
+                      phone: client?.phone,
+                      number: doc.number,
+                      total: doc.total,
+                      balance: invoiceBalance(doc, paymentRows ?? []),
+                      issueDate: doc.issue_date,
+                      dueDate: doc.due_or_valid_until,
+                      companyName: settings?.company_name,
+                      senderName: settings?.contact_name,
+                      viewUrl: doc.public_token
+                        ? publicInvoiceUrl(doc.public_token)
+                        : null,
+                      hasPublicToken: Boolean(doc.public_token),
+                    })
+                  : null;
               return (
               <TableRow key={doc.id}>
-                <TableCell>
-                  <Link
-                    href={`/documents/${doc.id}`}
-                    className="font-medium hover:underline"
-                  >
-                    {doc.number}
-                  </Link>
+                <TableCell className="whitespace-normal">
+                  <div className="flex flex-col items-start gap-1">
+                    <Link
+                      href={`/documents/${doc.id}`}
+                      className="font-medium whitespace-nowrap hover:underline"
+                    >
+                      {doc.number}
+                    </Link>
+                    {whatsapp ? (
+                          <SendWhatsAppButton
+                            documentId={doc.id}
+                            href={whatsapp.href}
+                            settled={whatsapp.settled}
+                            hint={whatsapp.hint}
+                            className="h-auto max-w-[8.75rem] whitespace-normal py-1.5 text-left sm:h-8 sm:max-w-none sm:whitespace-nowrap sm:py-0"
+                          />
+                    ) : null}
+                  </div>
                 </TableCell>
                 {!type ? (
                   <TableCell>

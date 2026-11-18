@@ -4,7 +4,9 @@ import { requireUser } from "@/lib/auth";
 import { DOCUMENT_TYPE_LABELS } from "@/lib/documents";
 import { parseRecipientEmails } from "@/lib/email/recipients";
 import { formatDate, formatZar } from "@/lib/money";
-import { PAYMENT_METHOD_LABELS, roundMoney } from "@/lib/payments";
+import { PAYMENT_METHOD_LABELS, invoiceBalance, roundMoney } from "@/lib/payments";
+import { publicInvoiceUrl } from "@/lib/public-url";
+import { invoiceWhatsAppButtonState } from "@/lib/whatsapp";
 import { DocumentEditor } from "@/components/documents/document-editor";
 import { DocumentActions } from "@/components/documents/document-actions";
 import { InvoiceEmailHistory } from "@/components/documents/invoice-email-history";
@@ -34,10 +36,11 @@ export default async function DocumentDetailPage({
     { data: catalogItems },
     { data: payments },
     { data: sends },
+    { data: settings },
   ] = await Promise.all([
     supabase
       .from("documents")
-      .select("*, document_lines(*), clients(email)")
+      .select("*, document_lines(*), clients(name, business_name, email, phone)")
       .eq("id", id)
       .maybeSingle(),
     supabase.from("clients").select("*").order("name"),
@@ -57,23 +60,57 @@ export default async function DocumentDetailPage({
       .select("*")
       .eq("document_id", id)
       .order("sent_at", { ascending: false }),
+    supabase
+      .from("company_settings")
+      .select("company_name, contact_name")
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   if (!document) notFound();
 
   const joinedClient = document.clients as
-    | { email: string }
-    | { email: string }[]
+    | {
+        name: string;
+        business_name: string;
+        email: string;
+        phone: string;
+      }
+    | {
+        name: string;
+        business_name: string;
+        email: string;
+        phone: string;
+      }[]
     | null;
-  const clientEmail = Array.isArray(joinedClient)
-    ? joinedClient[0]?.email
-    : joinedClient?.email;
-  const recipientEmails = parseRecipientEmails(clientEmail);
+  const clientRecord = Array.isArray(joinedClient)
+    ? joinedClient[0]
+    : joinedClient;
+  const recipientEmails = parseRecipientEmails(clientRecord?.email);
   const lines = document.document_lines ?? [];
   const paidTotal = roundMoney(
     (payments ?? []).reduce((sum, row) => sum + Number(row.amount), 0),
   );
-  const balance = roundMoney(Math.max(0, Number(document.total) - paidTotal));
+  const balance = invoiceBalance(document, payments ?? []);
+  const whatsapp =
+    document.type === "invoice" && document.status !== "void"
+      ? invoiceWhatsAppButtonState({
+          clientName: clientRecord?.name,
+          businessName: clientRecord?.business_name,
+          phone: clientRecord?.phone,
+          number: document.number,
+          total: document.total,
+          balance,
+          issueDate: document.issue_date,
+          dueDate: document.due_or_valid_until,
+          companyName: settings?.company_name,
+          senderName: settings?.contact_name,
+          viewUrl: document.public_token
+            ? publicInvoiceUrl(document.public_token)
+            : null,
+          hasPublicToken: Boolean(document.public_token),
+        })
+      : null;
 
   return (
     <div className="space-y-6">
@@ -93,6 +130,7 @@ export default async function DocumentDetailPage({
         <DocumentActions
           document={document}
           recipientEmails={recipientEmails}
+          whatsapp={whatsapp}
         />
       </div>
 
