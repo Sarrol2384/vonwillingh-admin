@@ -4,7 +4,13 @@ import { requireUser } from "@/lib/auth";
 import { DOCUMENT_TYPE_LABELS } from "@/lib/documents";
 import { parseRecipientEmails } from "@/lib/email/recipients";
 import { formatDate, formatZar } from "@/lib/money";
-import { PAYMENT_METHOD_LABELS, roundMoney } from "@/lib/payments";
+import { PAYMENT_METHOD_LABELS, invoiceBalance, roundMoney } from "@/lib/payments";
+import { publicInvoiceUrl } from "@/lib/public-url";
+import {
+  invoiceWhatsAppButtonState,
+  otherUnpaidForWhatsApp,
+  type WhatsAppClientInvoice,
+} from "@/lib/whatsapp";
 import { DocumentEditor } from "@/components/documents/document-editor";
 import { DocumentActions } from "@/components/documents/document-actions";
 import { InvoiceEmailHistory } from "@/components/documents/invoice-email-history";
@@ -34,10 +40,11 @@ export default async function DocumentDetailPage({
     { data: catalogItems },
     { data: payments },
     { data: sends },
+    { data: settings },
   ] = await Promise.all([
     supabase
       .from("documents")
-      .select("*, document_lines(*), clients(email)")
+      .select("*, document_lines(*), clients(name, business_name, email, phone)")
       .eq("id", id)
       .maybeSingle(),
     supabase.from("clients").select("*").order("name"),
@@ -57,23 +64,46 @@ export default async function DocumentDetailPage({
       .select("*")
       .eq("document_id", id)
       .order("sent_at", { ascending: false }),
+    supabase
+      .from("company_settings")
+      .select("company_name, contact_name")
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   if (!document) notFound();
 
   const joinedClient = document.clients as
-    | { email: string }
-    | { email: string }[]
+    | {
+        name: string;
+        business_name: string;
+        email: string;
+        phone: string;
+      }
+    | {
+        name: string;
+        business_name: string;
+        email: string;
+        phone: string;
+      }[]
     | null;
-  const clientEmail = Array.isArray(joinedClient)
-    ? joinedClient[0]?.email
-    : joinedClient?.email;
-  const recipientEmails = parseRecipientEmails(clientEmail);
+  const clientRecord = Array.isArray(joinedClient)
+    ? joinedClient[0]
+    : joinedClient;
+  const recipientEmails = parseRecipientEmails(clientRecord?.email);
   const lines = document.document_lines ?? [];
   const paidTotal = roundMoney(
     (payments ?? []).reduce((sum, row) => sum + Number(row.amount), 0),
   );
-  const balance = roundMoney(Math.max(0, Number(document.total) - paidTotal));
+  const balance = invoiceBalance(document, payments ?? []);
+  const whatsapp = await whatsAppForDocument({
+    supabase,
+    document,
+    client: clientRecord,
+    balance,
+    companyName: settings?.company_name,
+    senderName: settings?.contact_name,
+  });
 
   return (
     <div className="space-y-6">
@@ -93,6 +123,7 @@ export default async function DocumentDetailPage({
         <DocumentActions
           document={document}
           recipientEmails={recipientEmails}
+          whatsapp={whatsapp}
         />
       </div>
 
@@ -183,4 +214,83 @@ export default async function DocumentDetailPage({
       />
     </div>
   );
+}
+
+async function whatsAppForDocument(args: {
+  supabase: Awaited<ReturnType<typeof requireUser>>["supabase"];
+  document: {
+    id: string;
+    client_id: string;
+    type: string;
+    status: string;
+    number: string;
+    total: number | string;
+    issue_date: string;
+    due_or_valid_until: string | null;
+    public_token: string | null;
+  };
+  client:
+    | { name: string; business_name: string; phone: string }
+    | null
+    | undefined;
+  balance: number;
+  companyName?: string | null;
+  senderName?: string | null;
+}) {
+  const { document } = args;
+  if (document.type !== "invoice" || document.status === "void") return null;
+
+  const { data: siblings } = await args.supabase
+    .from("documents")
+    .select(
+      "id, type, status, number, total, issue_date, due_or_valid_until, public_token",
+    )
+    .eq("client_id", document.client_id)
+    .eq("type", "invoice")
+    .neq("status", "void");
+
+  const ids = (siblings ?? []).map((row) => row.id);
+  const { data: paymentRows } = ids.length
+    ? await args.supabase
+        .from("payments")
+        .select("amount, document_id")
+        .in("document_id", ids)
+    : { data: [] };
+
+  const clientInvoices: WhatsAppClientInvoice[] = (siblings ?? []).map(
+    (row) => ({
+      id: row.id,
+      type: row.type,
+      status: row.status,
+      number: row.number,
+      issueDate: row.issue_date,
+      dueDate: row.due_or_valid_until,
+      balance: invoiceBalance(
+        { id: row.id, total: row.total, status: row.status },
+        paymentRows ?? [],
+      ),
+      viewUrl: row.public_token ? publicInvoiceUrl(row.public_token) : null,
+      hasPublicToken: Boolean(row.public_token),
+    }),
+  );
+  const others = otherUnpaidForWhatsApp(document.id, clientInvoices);
+
+  return invoiceWhatsAppButtonState({
+    clientName: args.client?.name,
+    businessName: args.client?.business_name,
+    phone: args.client?.phone,
+    number: document.number,
+    total: document.total,
+    balance: args.balance,
+    issueDate: document.issue_date,
+    dueDate: document.due_or_valid_until,
+    companyName: args.companyName,
+    senderName: args.senderName,
+    viewUrl: document.public_token
+      ? publicInvoiceUrl(document.public_token)
+      : null,
+    otherInvoices: others.invoices,
+    hasPublicToken: Boolean(document.public_token),
+    otherTokensReady: others.tokensReady,
+  });
 }

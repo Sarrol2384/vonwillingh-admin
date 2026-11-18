@@ -6,6 +6,7 @@ import { Copy, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LinkButton } from "@/components/ui/link-button";
 import { SendInvoiceButton } from "@/components/documents/send-invoice-button";
+import { SendWhatsAppButton } from "@/components/documents/send-whatsapp-button";
 import {
   convertQuoteToInvoice,
   deleteDocument,
@@ -18,9 +19,15 @@ import { statusesForType } from "@/lib/documents";
 export function DocumentActions({
   document,
   recipientEmails = [],
+  whatsapp = null,
 }: {
   document: Document;
   recipientEmails?: string[];
+  whatsapp?: {
+    href: string | null;
+    settled: boolean;
+    hint: string | null;
+  } | null;
 }) {
   const [pending, startTransition] = useTransition();
   const statuses = statusesForType(document.type as DocumentType);
@@ -74,6 +81,15 @@ export function DocumentActions({
           number={document.number}
           total={Number(document.total)}
           recipients={recipientEmails}
+        />
+      ) : null}
+      {document.type === "invoice" && document.status !== "void" && whatsapp ? (
+        <SendWhatsAppButton
+          documentId={document.id}
+          href={whatsapp.href}
+          settled={whatsapp.settled}
+          hint={whatsapp.hint}
+          hintOnOwnRow
         />
       ) : null}
       {document.type === "invoice" && document.status !== "void" ? (
