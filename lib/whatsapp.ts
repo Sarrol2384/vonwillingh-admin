@@ -14,6 +14,22 @@ export type InvoiceWhatsAppShare = {
   hint: string | null;
 };
 
+export type WhatsAppOtherInvoice = {
+  number: string;
+  balance: number | string;
+  dueDate?: string | null;
+  issueDate?: string | null;
+  viewUrl?: string | null;
+};
+
+export type WhatsAppClientInvoice = WhatsAppOtherInvoice & {
+  id: string;
+  type: string;
+  status: string;
+  /** False when a public token still has to be created before the link can be shared. */
+  hasPublicToken: boolean;
+};
+
 export function normaliseSaWhatsAppPhone(
   raw: string | null | undefined,
 ): string | null {
@@ -84,6 +100,50 @@ function signature(senderName: string, companyName: string): string {
   return `Kind regards,\n${senderName}\n${companyName}`;
 }
 
+const PAYMENT_LINE_ONE =
+  "Please use the link above when making payment, so the payment is matched to the right invoice.";
+const PAYMENT_LINE_MANY =
+  "Please use the links above when making payment, so each payment is matched to the right invoice.";
+
+/** Other invoices for this client that still have a balance, oldest first. */
+export function otherUnpaidForWhatsApp(
+  currentId: string,
+  invoices: WhatsAppClientInvoice[],
+): { invoices: WhatsAppClientInvoice[]; tokensReady: boolean } {
+  const unpaid = invoices
+    .filter((invoice) => {
+      if (invoice.id === currentId) return false;
+      if (invoice.type !== "invoice" || invoice.status === "void") return false;
+      return roundMoney(Math.max(0, moneyNumber(invoice.balance))) > 0;
+    })
+    .sort((a, b) => {
+      const issued = (a.issueDate ?? "").localeCompare(b.issueDate ?? "");
+      if (issued !== 0) return issued;
+      return a.number.localeCompare(b.number);
+    });
+
+  return {
+    invoices: unpaid,
+    tokensReady: unpaid.every((invoice) => invoice.hasPublicToken),
+  };
+}
+
+function otherInvoicesBlock(invoices: WhatsAppOtherInvoice[]): string {
+  if (!invoices.length) return "";
+  const entries = invoices.map((invoice) => {
+    const due = formatMessageDate(invoice.dueDate);
+    const amount = formatZar(
+      roundMoney(Math.max(0, moneyNumber(invoice.balance))),
+    );
+    const duePart = due ? `, due ${due}` : "";
+    const url = invoice.viewUrl?.trim();
+    return url
+      ? `${invoice.number} for ${amount}${duePart}:\n${url}`
+      : `${invoice.number} for ${amount}${duePart}:`;
+  });
+  return `Your previous invoices are also still unpaid:\n${entries.join("\n\n")}`;
+}
+
 export function buildInvoiceWhatsAppShare(input: {
   clientName?: string | null;
   businessName?: string | null;
@@ -96,6 +156,7 @@ export function buildInvoiceWhatsAppShare(input: {
   companyName?: string | null;
   senderName?: string | null;
   viewUrl?: string | null;
+  otherInvoices?: WhatsAppOtherInvoice[] | null;
 }): InvoiceWhatsAppShare {
   const company = input.companyName?.trim() || DEFAULT_COMPANY;
   const sender = input.senderName?.trim() || company;
@@ -124,11 +185,26 @@ export function buildInvoiceWhatsAppShare(input: {
       ? `You can view the invoice here:\n${viewUrl}`
       : `You can view the invoice and pay online here:\n${viewUrl}`
     : "";
+  const others = [...(input.otherInvoices ?? [])].sort((a, b) => {
+    const issued = (a.issueDate ?? "").localeCompare(b.issueDate ?? "");
+    if (issued !== 0) return issued;
+    return a.number.localeCompare(b.number);
+  });
+  const otherBlock = otherInvoicesBlock(others);
+  const hasLink =
+    Boolean(viewUrl) || others.some((invoice) => invoice.viewUrl?.trim());
+  const paymentLine = !hasLink
+    ? ""
+    : others.length
+      ? PAYMENT_LINE_MANY
+      : PAYMENT_LINE_ONE;
 
   const message = [
     `Hi ${greeting},`,
     summary,
     link,
+    otherBlock,
+    paymentLine,
     signature(sender, company),
   ]
     .filter(Boolean)
@@ -148,11 +224,14 @@ export function buildInvoiceWhatsAppShare(input: {
 export function invoiceWhatsAppButtonState(
   input: Parameters<typeof buildInvoiceWhatsAppShare>[0] & {
     hasPublicToken: boolean;
+    /** False when another unpaid invoice still needs a public token. */
+    otherTokensReady?: boolean;
   },
 ): { href: string | null; settled: boolean; hint: string | null } {
   const share = buildInvoiceWhatsAppShare(input);
+  const ready = input.hasPublicToken && input.otherTokensReady !== false;
   return {
-    href: input.hasPublicToken ? share.href : null,
+    href: ready ? share.href : null,
     settled: share.settled,
     hint: share.hint,
   };

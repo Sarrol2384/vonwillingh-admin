@@ -6,7 +6,11 @@ import { parseRecipientEmails } from "@/lib/email/recipients";
 import { formatDate, formatZar } from "@/lib/money";
 import { PAYMENT_METHOD_LABELS, invoiceBalance, roundMoney } from "@/lib/payments";
 import { publicInvoiceUrl } from "@/lib/public-url";
-import { invoiceWhatsAppButtonState } from "@/lib/whatsapp";
+import {
+  invoiceWhatsAppButtonState,
+  otherUnpaidForWhatsApp,
+  type WhatsAppClientInvoice,
+} from "@/lib/whatsapp";
 import { DocumentEditor } from "@/components/documents/document-editor";
 import { DocumentActions } from "@/components/documents/document-actions";
 import { InvoiceEmailHistory } from "@/components/documents/invoice-email-history";
@@ -92,25 +96,14 @@ export default async function DocumentDetailPage({
     (payments ?? []).reduce((sum, row) => sum + Number(row.amount), 0),
   );
   const balance = invoiceBalance(document, payments ?? []);
-  const whatsapp =
-    document.type === "invoice" && document.status !== "void"
-      ? invoiceWhatsAppButtonState({
-          clientName: clientRecord?.name,
-          businessName: clientRecord?.business_name,
-          phone: clientRecord?.phone,
-          number: document.number,
-          total: document.total,
-          balance,
-          issueDate: document.issue_date,
-          dueDate: document.due_or_valid_until,
-          companyName: settings?.company_name,
-          senderName: settings?.contact_name,
-          viewUrl: document.public_token
-            ? publicInvoiceUrl(document.public_token)
-            : null,
-          hasPublicToken: Boolean(document.public_token),
-        })
-      : null;
+  const whatsapp = await whatsAppForDocument({
+    supabase,
+    document,
+    client: clientRecord,
+    balance,
+    companyName: settings?.company_name,
+    senderName: settings?.contact_name,
+  });
 
   return (
     <div className="space-y-6">
@@ -221,4 +214,83 @@ export default async function DocumentDetailPage({
       />
     </div>
   );
+}
+
+async function whatsAppForDocument(args: {
+  supabase: Awaited<ReturnType<typeof requireUser>>["supabase"];
+  document: {
+    id: string;
+    client_id: string;
+    type: string;
+    status: string;
+    number: string;
+    total: number | string;
+    issue_date: string;
+    due_or_valid_until: string | null;
+    public_token: string | null;
+  };
+  client:
+    | { name: string; business_name: string; phone: string }
+    | null
+    | undefined;
+  balance: number;
+  companyName?: string | null;
+  senderName?: string | null;
+}) {
+  const { document } = args;
+  if (document.type !== "invoice" || document.status === "void") return null;
+
+  const { data: siblings } = await args.supabase
+    .from("documents")
+    .select(
+      "id, type, status, number, total, issue_date, due_or_valid_until, public_token",
+    )
+    .eq("client_id", document.client_id)
+    .eq("type", "invoice")
+    .neq("status", "void");
+
+  const ids = (siblings ?? []).map((row) => row.id);
+  const { data: paymentRows } = ids.length
+    ? await args.supabase
+        .from("payments")
+        .select("amount, document_id")
+        .in("document_id", ids)
+    : { data: [] };
+
+  const clientInvoices: WhatsAppClientInvoice[] = (siblings ?? []).map(
+    (row) => ({
+      id: row.id,
+      type: row.type,
+      status: row.status,
+      number: row.number,
+      issueDate: row.issue_date,
+      dueDate: row.due_or_valid_until,
+      balance: invoiceBalance(
+        { id: row.id, total: row.total, status: row.status },
+        paymentRows ?? [],
+      ),
+      viewUrl: row.public_token ? publicInvoiceUrl(row.public_token) : null,
+      hasPublicToken: Boolean(row.public_token),
+    }),
+  );
+  const others = otherUnpaidForWhatsApp(document.id, clientInvoices);
+
+  return invoiceWhatsAppButtonState({
+    clientName: args.client?.name,
+    businessName: args.client?.business_name,
+    phone: args.client?.phone,
+    number: document.number,
+    total: document.total,
+    balance: args.balance,
+    issueDate: document.issue_date,
+    dueDate: document.due_or_valid_until,
+    companyName: args.companyName,
+    senderName: args.senderName,
+    viewUrl: document.public_token
+      ? publicInvoiceUrl(document.public_token)
+      : null,
+    otherInvoices: others.invoices,
+    hasPublicToken: Boolean(document.public_token),
+    otherTokensReady: others.tokensReady,
+  });
 }

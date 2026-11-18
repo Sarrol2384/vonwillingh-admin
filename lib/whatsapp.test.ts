@@ -5,7 +5,9 @@ import {
   buildInvoiceWhatsAppShare,
   invoiceGreetingName,
   normaliseSaWhatsAppPhone,
+  otherUnpaidForWhatsApp,
   whatsAppPhoneHint,
+  type WhatsAppClientInvoice,
 } from "./whatsapp";
 
 const VIEW_URL =
@@ -70,6 +72,7 @@ describe("buildInvoiceWhatsAppShare", () => {
         "Hi Victor,",
         `Please find invoice INV-2026-0007 from VonWillingh Online for ${formatZar(485)}, issued 12 November, due 26 November.`,
         `You can view the invoice and pay online here:\n${VIEW_URL}`,
+        "Please use the link above when making payment, so the payment is matched to the right invoice.",
         "Kind regards,\nSarrol Von Willingh\nVonWillingh Online",
       ].join("\n\n"),
     );
@@ -131,6 +134,81 @@ describe("buildInvoiceWhatsAppShare", () => {
     assert.equal(share.message.includes("pay online"), false);
     assert.equal(share.message.includes("A credit of"), false);
     assert.match(share.message, /You can view the invoice here:/);
+    assert.equal(share.message.includes("previous invoices"), false);
+    assert.match(share.message, /Please use the link above when making payment/);
+  });
+
+  test("lists the client's other unpaid invoices, oldest first", () => {
+    const older = "https://vonwillingh-admin.vercel.app/invoice/older";
+    const newer = "https://vonwillingh-admin.vercel.app/invoice/newer";
+    const share = buildInvoiceWhatsAppShare({
+      clientName: "Victor",
+      phone: "+27 82 306 3316",
+      number: "INV-2026-0007",
+      total: 485,
+      balance: 485,
+      issueDate: "2026-11-12",
+      dueDate: "2026-11-26",
+      companyName: "VonWillingh Online",
+      senderName: "Sarrol Von Willingh",
+      viewUrl: VIEW_URL,
+      otherInvoices: [
+        {
+          number: "INV-2026-0006",
+          balance: 120,
+          dueDate: "2026-12-01",
+          issueDate: "2026-11-01",
+          viewUrl: newer,
+        },
+        {
+          number: "INV-2026-0005",
+          balance: 970,
+          dueDate: "2026-11-20",
+          issueDate: "2026-10-20",
+          viewUrl: older,
+        },
+      ],
+    });
+
+    const olderLine = `INV-2026-0005 for ${formatZar(970)}, due 20 November:\n${older}`;
+    const newerLine = `INV-2026-0006 for ${formatZar(120)}, due 1 December:\n${newer}`;
+    const section = share.message.indexOf("Your previous invoices are also still unpaid:");
+    assert.ok(section > share.message.indexOf(VIEW_URL));
+    assert.ok(share.message.indexOf(olderLine) < share.message.indexOf(newerLine));
+    assert.match(
+      share.message,
+      /Please use the links above when making payment, so each payment is matched to the right invoice\./,
+    );
+    assert.equal(share.message.toLowerCase().includes("vat"), false);
+  });
+
+  test("mentions other unpaid invoices on a paid receipt", () => {
+    const share = buildInvoiceWhatsAppShare({
+      clientName: "Victor",
+      phone: "082 306 3316",
+      number: "INV-2026-0007",
+      total: 485,
+      balance: 0,
+      issueDate: "2026-11-12",
+      dueDate: "2026-11-26",
+      companyName: "VonWillingh Online",
+      senderName: "Sarrol Von Willingh",
+      viewUrl: VIEW_URL,
+      otherInvoices: [
+        {
+          number: "INV-2026-0005",
+          balance: 970,
+          dueDate: "2026-11-20",
+          issueDate: "2026-10-20",
+          viewUrl: "https://vonwillingh-admin.vercel.app/invoice/older",
+        },
+      ],
+    });
+
+    assert.match(share.message, /is paid in full/);
+    assert.match(share.message, /Your previous invoices are also still unpaid:\nINV-2026-0005/);
+    assert.match(share.message, /Please use the links above/);
+    assert.equal(share.message.includes("pay online"), false);
   });
 
   test("opens WhatsApp with only the text when the client has no usable number", () => {
@@ -164,8 +242,55 @@ describe("buildInvoiceWhatsAppShare", () => {
     assert.match(invalid.hint ?? "", /isn't in a WhatsApp format/);
     assert.equal(invalid.message.includes("http"), false);
     assert.equal(whatsAppPhoneHint("082 306 3316"), null);
+    assert.equal(invalid.message.includes("Please use the link above"), false);
   });
 });
+
+describe("otherUnpaidForWhatsApp", () => {
+  test("keeps unpaid invoices except the current one, oldest first", () => {
+    const rows: WhatsAppClientInvoice[] = [
+      row("current", "INV-2026-0007", "2026-11-12", "sent", 485, true),
+      row("newer", "INV-2026-0006", "2026-11-01", "draft", 120, false),
+      row("older", "INV-2026-0005", "2026-10-20", "sent", 970, true),
+      row("paid", "INV-2026-0004", "2026-09-01", "paid", 0, true),
+      row("voided", "INV-2026-0003", "2026-08-01", "void", 400, true),
+      row("quote", "QUO-2026-0001", "2026-07-01", "sent", 50, true, "quote"),
+    ];
+
+    const result = otherUnpaidForWhatsApp("current", rows);
+    assert.deepEqual(
+      result.invoices.map((invoice) => invoice.number),
+      ["INV-2026-0005", "INV-2026-0006"],
+    );
+    assert.equal(result.tokensReady, false);
+
+    const ready = otherUnpaidForWhatsApp("current", [
+      row("current", "INV-2026-0007", "2026-11-12", "sent", 485, true),
+      row("older", "INV-2026-0005", "2026-10-20", "sent", 970, true),
+    ]);
+    assert.equal(ready.tokensReady, true);
+  });
+});
+
+function row(
+  id: string,
+  number: string,
+  issueDate: string,
+  status: string,
+  balance: number,
+  hasPublicToken: boolean,
+  type = "invoice",
+): WhatsAppClientInvoice {
+  return {
+    id,
+    type,
+    status,
+    number,
+    issueDate,
+    balance,
+    hasPublicToken,
+  };
+}
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

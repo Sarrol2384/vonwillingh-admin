@@ -6,9 +6,13 @@ import {
   DOCUMENT_TYPE_LABELS,
 } from "@/lib/documents";
 import { formatDate, formatZar } from "@/lib/money";
-import { invoiceBalance } from "@/lib/payments";
+import { remainingByInvoice } from "@/lib/payments";
 import { publicInvoiceUrl } from "@/lib/public-url";
-import { invoiceWhatsAppButtonState } from "@/lib/whatsapp";
+import {
+  invoiceWhatsAppButtonState,
+  otherUnpaidForWhatsApp,
+  type WhatsAppClientInvoice,
+} from "@/lib/whatsapp";
 import { LinkButton } from "@/components/ui/link-button";
 import {
   Table,
@@ -51,6 +55,11 @@ export default async function DocumentsPage({
         .maybeSingle(),
       supabase.from("payments").select("amount, document_id"),
     ]);
+
+  const balances = remainingByInvoice(
+    (documents ?? []).filter((doc) => doc.type === "invoice"),
+    paymentRows ?? [],
+  );
 
   const title = type ? DOCUMENT_TYPE_LABELS[type] + "s" : "Documents";
   const newHref = type
@@ -102,6 +111,27 @@ export default async function DocumentsPage({
               } | null;
               const clientLabel =
                 client?.business_name?.trim() || client?.name || "—";
+              const clientInvoices: WhatsAppClientInvoice[] = (
+                documents ?? []
+              )
+                .filter(
+                  (row) =>
+                    row.client_id === doc.client_id && row.type === "invoice",
+                )
+                .map((row) => ({
+                  id: row.id,
+                  type: row.type,
+                  status: row.status,
+                  number: row.number,
+                  issueDate: row.issue_date,
+                  dueDate: row.due_or_valid_until,
+                  balance: balances.get(row.id) ?? 0,
+                  viewUrl: row.public_token
+                    ? publicInvoiceUrl(row.public_token)
+                    : null,
+                  hasPublicToken: Boolean(row.public_token),
+                }));
+              const others = otherUnpaidForWhatsApp(doc.id, clientInvoices);
               const whatsapp =
                 doc.type === "invoice" && doc.status !== "void"
                   ? invoiceWhatsAppButtonState({
@@ -110,7 +140,7 @@ export default async function DocumentsPage({
                       phone: client?.phone,
                       number: doc.number,
                       total: doc.total,
-                      balance: invoiceBalance(doc, paymentRows ?? []),
+                      balance: balances.get(doc.id) ?? 0,
                       issueDate: doc.issue_date,
                       dueDate: doc.due_or_valid_until,
                       companyName: settings?.company_name,
@@ -118,7 +148,9 @@ export default async function DocumentsPage({
                       viewUrl: doc.public_token
                         ? publicInvoiceUrl(doc.public_token)
                         : null,
+                      otherInvoices: others.invoices,
                       hasPublicToken: Boolean(doc.public_token),
+                      otherTokensReady: others.tokensReady,
                     })
                   : null;
               return (
